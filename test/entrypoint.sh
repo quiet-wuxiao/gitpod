@@ -5,6 +5,7 @@
 
 set -ex
 
+sleep 3000s
 # shellcheck disable=SC2045
 for i in $(ls /tests/*.test); do
     "$i" "$@";

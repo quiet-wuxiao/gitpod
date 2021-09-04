@@ -2,14 +2,14 @@
 # Licensed under the GNU Affero General Public License (AGPL).
 # See License-AGPL.txt in the project root for license information.
 
-FROM alpine:3.14
+FROM ubuntu:latest
 
 # Ensure latest packages are present, like security updates.
-RUN  apk upgrade --no-cache \
-  && apk add --no-cache ca-certificates
+# RUN  apk upgrade --no-cache \
+#   && apk add --no-cache ca-certificates
 
-# convenience scripting tools
-RUN apk add --no-cache bash moreutils
+# # convenience scripting tools
+# RUN apk add --no-cache bash moreutils
 
 COPY test--app/bin /tests
 ENV PATH=$PATH:/tests
