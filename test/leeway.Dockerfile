@@ -4,6 +4,12 @@
 
 FROM ubuntu:latest
 
+RUN apt-get update -y && \
+apt-get install ca-certificates -y && \
+apt-get install vim -y && \
+apt-get install net-tools -y && \
+apt-get install curl -y && \
+apt-get install git -y
 # Ensure latest packages are present, like security updates.
 # RUN  apk upgrade --no-cache \
 #   && apk add --no-cache ca-certificates
@@ -11,6 +17,12 @@ FROM ubuntu:latest
 # # convenience scripting tools
 # RUN apk add --no-cache bash moreutils
 
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+mv kubectl /usr/bin/ && chmod +x /usr/bin/kubectl
+
+RUN (   set -x; cd "$(mktemp -d)" &&   OS="$(uname | tr '[:upper:]' '[:lower:]')" &&   ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/\(arm\)\(64\)\?.*/\1\2/' -e 's/aarch64$/arm64/')" &&   curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/krew.tar.gz" &&   tar zxvf krew.tar.gz &&   KREW=./krew-"${OS}_${ARCH}" &&   "$KREW" install krew; )
+
+RUN kubectl krew install ns && kubectl krew install ctx && export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 COPY test--app/bin /tests
 ENV PATH=$PATH:/tests
 COPY entrypoint.sh /entrypoint.sh
