@@ -361,10 +361,12 @@ func getWorkspaceMetadata(pod *corev1.Pod) *api.WorkspaceMetadata {
 func (m *Manager) extractStatusFromPod(result *api.WorkspaceStatus, wso workspaceObjects) error {
 	pod := wso.Pod
 
+	log.WithField("pod", pod).Info("extracting status")
 	// check failure states, i.e. determine value of result.Failed
 	failure, phase := extractFailure(wso)
 	result.Conditions.Failed = failure
 	if phase != nil {
+		log.WithField("pod", pod).Info("extracting status failed")
 		result.Phase = *phase
 		return nil
 	}
@@ -384,6 +386,7 @@ func (m *Manager) extractStatusFromPod(result *api.WorkspaceStatus, wso workspac
 	}
 
 	if isPodBeingDeleted(pod) {
+		log.WithField("pod", pod).Info("extracting status pod being deleted")
 		result.Phase = api.WorkspacePhase_STOPPING
 
 		_, podFailedBeforeBeingStopped := pod.Annotations[workspaceFailedBeforeStoppingAnnotation]
@@ -440,6 +443,7 @@ func (m *Manager) extractStatusFromPod(result *api.WorkspaceStatus, wso workspac
 	}
 
 	status := pod.Status
+	log.WithField("pod", pod).Info("extracting status pod status:%#v", status)
 	if status.Phase == corev1.PodPending {
 		// check if any container is still pulling images
 		for _, cs := range status.ContainerStatuses {

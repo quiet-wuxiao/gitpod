@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -259,13 +260,13 @@ func WorkspaceCanFail(o *waitForWorkspaceOpts) {
 
 // WaitForWorkspace waits until a workspace is running. Fails the test if the workspace
 // fails or does not become RUNNING before the context is canceled.
-func (t *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opts ...WaitForWorkspaceOpt) (lastStatus *wsmanapi.WorkspaceStatus) {
+func (it *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opts ...WaitForWorkspaceOpt) (lastStatus *wsmanapi.WorkspaceStatus) {
 	var cfg waitForWorkspaceOpts
 	for _, o := range opts {
 		o(&cfg)
 	}
 
-	wsman := t.API().WorkspaceManager()
+	wsman := it.API().WorkspaceManager()
 
 	var sub wsmanapi.WorkspaceManager_SubscribeClient
 	for i := 0; i < 5; i++ {
@@ -276,7 +277,7 @@ func (t *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opt
 			continue
 		}
 		if err != nil {
-			t.t.Fatalf("cannot listen for workspace updates: %q", err)
+			it.t.Fatalf("cannot listen for workspace updates: %q", err)
 			return
 		}
 		defer func() {
@@ -295,7 +296,7 @@ func (t *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opt
 		for {
 			resp, err := sub.Recv()
 			if err != nil {
-				t.t.Errorf("workspace update error: %q", err)
+				it.t.Errorf("workspace update error: %q", err)
 				return
 			}
 			status = resp.GetStatus()
@@ -305,6 +306,7 @@ func (t *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opt
 			if status.Id != instanceID {
 				continue
 			}
+			it.t.Logf("waiting on workspace start:%#v", status)
 
 			if cfg.CanFail {
 				if status.Phase == wsmanapi.WorkspacePhase_STOPPING {
@@ -315,15 +317,15 @@ func (t *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opt
 				}
 			} else {
 				if status.Conditions.Failed != "" {
-					t.t.Errorf("workspace instance %s failed: %s", instanceID, status.Conditions.Failed)
+					it.t.Errorf("workspace instance %s failed: %s", instanceID, status.Conditions.Failed)
 					return
 				}
 				if status.Phase == wsmanapi.WorkspacePhase_STOPPING {
-					t.t.Errorf("workspace instance %s is stopping", instanceID)
+					it.t.Errorf("workspace instance %s is stopping", instanceID)
 					return
 				}
 				if status.Phase == wsmanapi.WorkspacePhase_STOPPED {
-					t.t.Errorf("workspace instance %s has stopped", instanceID)
+					it.t.Errorf("workspace instance %s has stopped", instanceID)
 					return
 				}
 			}
@@ -345,12 +347,12 @@ func (t *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opt
 			return
 		case wsmanapi.WorkspacePhase_STOPPING:
 			if !cfg.CanFail {
-				t.t.Fatalf("workspace instance %s is stopping", instanceID)
+				it.t.Fatalf("workspace instance %s is stopping", instanceID)
 			}
 			return
 		case wsmanapi.WorkspacePhase_STOPPED:
 			if !cfg.CanFail {
-				t.t.Fatalf("workspace instance %s has stopped", instanceID)
+				it.t.Fatalf("workspace instance %s has stopped", instanceID)
 			}
 			return
 		}
@@ -358,7 +360,7 @@ func (t *Test) WaitForWorkspaceStart(ctx context.Context, instanceID string, opt
 
 	select {
 	case <-ctx.Done():
-		t.t.Fatalf("cannot wait for workspace: %q", ctx.Err())
+		it.t.Fatalf("cannot wait for workspace start: %q", ctx.Err())
 		return nil
 	case s := <-done:
 		return s
@@ -413,13 +415,14 @@ func (it *Test) WaitForWorkspaceStop(instanceID string) (lastStatus *wsmanapi.Wo
 	if desc != nil {
 		switch desc.Status.Phase {
 		case wsmanapi.WorkspacePhase_STOPPED:
-			return desc.Status
+			// ensure theia service is cleaned up
+			lastStatus = desc.Status
 		}
 	}
 
 	select {
 	case <-it.ctx.Done():
-		it.t.Fatalf("cannot wait for workspace: %q", it.ctx.Err())
+		it.t.Fatalf("cannot wait for workspace stop: %q", it.ctx.Err())
 		return
 	case <-done:
 	}
@@ -432,8 +435,9 @@ func (it *Test) WaitForWorkspaceStop(instanceID string) (lastStatus *wsmanapi.Wo
 		serviceGone bool
 		k8s, ns     = it.API().Kubernetes()
 	)
+	theiaName := fmt.Sprintf("ws-%s-theia", strings.TrimSpace(strings.ToLower(workspaceID)))
 	for time.Since(start) < 1*time.Minute {
-		_, err := k8s.CoreV1().Services(ns).Get(ctx, fmt.Sprintf("ws-%s-theia", workspaceID), v1.GetOptions{})
+		_, err := k8s.CoreV1().Services(ns).Get(ctx, theiaName, v1.GetOptions{})
 		if errors.IsNotFound(err) {
 			serviceGone = true
 			break
@@ -441,7 +445,7 @@ func (it *Test) WaitForWorkspaceStop(instanceID string) (lastStatus *wsmanapi.Wo
 		time.Sleep(200 * time.Millisecond)
 	}
 	if !serviceGone {
-		it.t.Fatalf("Theia service did not disappear in time")
+		it.t.Fatalf("Theia service:%s did not disappear in time", theiaName)
 		return
 	}
 

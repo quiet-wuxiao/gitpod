@@ -78,6 +78,7 @@ func (p *WorkspaceReadyProbe) Run(ctx context.Context) WorkspaceProbeResult {
 			return WorkspaceProbeStopped
 		}
 
+		log.WithField("url", p.readyURL).Info("probing")
 		resp, err := client.Get(p.readyURL)
 		if err != nil {
 			urlerr, ok := err.(*url.Error)
@@ -88,12 +89,13 @@ func (p *WorkspaceReadyProbe) Run(ctx context.Context) WorkspaceProbeResult {
 			}
 
 			// we've timed out - do not log this as it would spam the logs for no good reason
+			log.WithField("url", p.readyURL).Info("probing timeout")
 			continue
 		}
 		resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			log.WithField("url", p.readyURL).WithField("status", resp.StatusCode).Debug("workspace did not respond to ready probe with OK status")
+			log.WithField("url", p.readyURL).WithField("status", resp.StatusCode).Info("workspace did not respond to ready probe with OK status")
 			time.Sleep(p.RetryDelay)
 			continue
 		}

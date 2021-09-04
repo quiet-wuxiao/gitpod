@@ -18,7 +18,7 @@ import (
 
 // TestBackup tests a basic start/modify/restart cycle
 func TestBackup(t *testing.T) {
-	it, ctx := integration.NewTest(t, 5*time.Minute)
+	it, ctx := integration.NewTest(t, 3*time.Minute)
 	defer it.Done()
 
 	ws := integration.LaunchWorkspaceDirectly(it)
@@ -50,8 +50,14 @@ func TestBackup(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	if sctx.Err() != nil {
+		t.Fatal("Stop context expired")
+		return
+	}
 
+	t.Log("Waiting")
 	it.WaitForWorkspaceStop(ws.Req.Id)
+	t.Log("Stopped")
 
 	ws = integration.LaunchWorkspaceDirectly(it, integration.WithRequestModifier(func(w *wsapi.StartWorkspaceRequest) error {
 		w.ServicePrefix = ws.Req.ServicePrefix
@@ -59,12 +65,27 @@ func TestBackup(t *testing.T) {
 		w.Metadata.Owner = ws.Req.Metadata.Owner
 		return nil
 	}))
+	t.Log("Launched")
 	rsa, err = it.Instrument(integration.ComponentWorkspace, "workspace", integration.WithInstanceID(ws.Req.Id))
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
 
+	defer func() {
+		t.Log("Waiting on test end")
+		sctx, scancel := context.WithTimeout(ctx, 5*time.Second)
+		defer scancel()
+		_, err = it.API().WorkspaceManager().StopWorkspace(sctx, &wsapi.StopWorkspaceRequest{
+			Id: ws.Req.Id,
+		})
+		if err != nil {
+			t.Errorf("Error:%s on test end", err)
+			return
+		}
+		it.WaitForWorkspaceStop(ws.Req.Id)
+		t.Log("Stopped on test end")
+	}()
 	var ls agent.ListDirResponse
 	err = rsa.Call("WorkspaceAgent.ListDir", &agent.ListDirRequest{
 		Dir: "/workspace",
