@@ -73,18 +73,18 @@ func TestBackup(t *testing.T) {
 	}
 
 	defer func() {
-		t.Log("Waiting on test end")
+		t.Log("Waiting on TestBackup exit")
 		sctx, scancel := context.WithTimeout(ctx, 5*time.Second)
 		defer scancel()
 		_, err = it.API().WorkspaceManager().StopWorkspace(sctx, &wsapi.StopWorkspaceRequest{
 			Id: ws.Req.Id,
 		})
 		if err != nil {
-			t.Errorf("Error:%s on test end", err)
+			t.Errorf("Error:%s on TestBackup exit", err)
 			return
 		}
 		it.WaitForWorkspaceStop(ws.Req.Id)
-		t.Log("Stopped on test end")
+		t.Log("Stopped on TestBackup exit")
 	}()
 	var ls agent.ListDirResponse
 	err = rsa.Call("WorkspaceAgent.ListDir", &agent.ListDirRequest{
