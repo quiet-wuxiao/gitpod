@@ -295,7 +295,7 @@ func (s *WorkspaceService) DisposeWorkspace(ctx context.Context, req *api.Dispos
 
 	sess := s.store.Get(req.Id)
 	if sess == nil {
-		return nil, status.Error(codes.NotFound, "workspace does not exist")
+		return nil, status.Error(codes.NotFound, "dispose: workspace does not exist")
 	}
 
 	// We were asked to do a backup of a session that was never ready. There seems to have been some state drift here - tell the caller.
@@ -651,7 +651,7 @@ func (s *WorkspaceService) WaitForInit(ctx context.Context, req *api.WaitForInit
 
 	session := s.store.Get(req.Id)
 	if session == nil {
-		return nil, status.Error(codes.NotFound, "workspace does not exist")
+		return nil, status.Error(codes.NotFound, "init: workspace does not exist")
 	}
 
 	// the next call will block until the workspace is initialized
@@ -672,13 +672,13 @@ func (s *WorkspaceService) TakeSnapshot(ctx context.Context, req *api.TakeSnapsh
 
 	sess := s.store.Get(req.Id)
 	if sess == nil {
-		return nil, status.Error(codes.NotFound, "workspace does not exist")
+		return nil, status.Error(codes.NotFound, "snapshot: workspace does not exist")
 	}
 	if !sess.IsReady() {
-		return nil, status.Error(codes.FailedPrecondition, "workspace is not ready")
+		return nil, status.Error(codes.FailedPrecondition, "snapshot: workspace is not ready")
 	}
 	if sess.RemoteStorageDisabled {
-		return nil, status.Error(codes.FailedPrecondition, "workspace has no remote storage")
+		return nil, status.Error(codes.FailedPrecondition, "snapshot: workspace has no remote storage")
 	}
 	rs, ok := sess.NonPersistentAttrs[session.AttrRemoteStorage].(storage.DirectAccess)
 	if rs == nil || !ok {

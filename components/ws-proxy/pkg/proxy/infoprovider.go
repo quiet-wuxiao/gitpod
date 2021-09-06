@@ -255,6 +255,7 @@ func (p *RemoteWorkspaceInfoProvider) listen(client wsapi.WorkspaceManagerClient
 	for {
 		resp, err := stream.Recv()
 		if err != nil {
+			log.WithError(err).Error("error receiving status update")
 			return err
 		}
 
@@ -264,6 +265,7 @@ func (p *RemoteWorkspaceInfoProvider) listen(client wsapi.WorkspaceManagerClient
 			continue
 		}
 
+		log.WithField(status).Info("received status update")
 		if status.Phase == wsapi.WorkspacePhase_STOPPED {
 			p.cache.Delete(status.Metadata.MetaId)
 		} else {

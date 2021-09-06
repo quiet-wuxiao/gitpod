@@ -55,9 +55,7 @@ func TestBackup(t *testing.T) {
 		return
 	}
 
-	t.Log("Waiting")
 	it.WaitForWorkspaceStop(ws.Req.Id)
-	t.Log("Stopped")
 
 	ws = integration.LaunchWorkspaceDirectly(it, integration.WithRequestModifier(func(w *wsapi.StartWorkspaceRequest) error {
 		w.ServicePrefix = ws.Req.ServicePrefix
@@ -65,7 +63,6 @@ func TestBackup(t *testing.T) {
 		w.Metadata.Owner = ws.Req.Metadata.Owner
 		return nil
 	}))
-	t.Log("Launched")
 	rsa, err = it.Instrument(integration.ComponentWorkspace, "workspace", integration.WithInstanceID(ws.Req.Id))
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +70,7 @@ func TestBackup(t *testing.T) {
 	}
 
 	defer func() {
-		t.Log("Waiting on TestBackup exit")
+		t.Log("Cleaning up on TestBackup exit")
 		sctx, scancel := context.WithTimeout(ctx, 5*time.Second)
 		defer scancel()
 		_, err = it.API().WorkspaceManager().StopWorkspace(sctx, &wsapi.StopWorkspaceRequest{
@@ -83,8 +80,7 @@ func TestBackup(t *testing.T) {
 			t.Errorf("Error:%s on TestBackup exit", err)
 			return
 		}
-		it.WaitForWorkspaceStop(ws.Req.Id)
-		t.Log("Stopped on TestBackup exit")
+		// it.WaitForWorkspaceStop(ws.Req.Id)
 	}()
 	var ls agent.ListDirResponse
 	err = rsa.Call("WorkspaceAgent.ListDir", &agent.ListDirRequest{
