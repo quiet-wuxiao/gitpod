@@ -448,6 +448,20 @@ func (it *Test) WaitForWorkspaceStop(instanceID string) (lastStatus *wsmanapi.Wo
 		it.t.Fatalf("Theia service:%s did not disappear in time", theiaName)
 		return
 	}
+	// Wait for the theia endpoints to be properly deleted (i.e. syncing)
+	var endpointGone bool
+	for time.Since(start) < 1*time.Minute {
+		_, err := k8s.CoreV1().Endpoints(ns).Get(ctx, theiaName, v1.GetOptions{})
+		if errors.IsNotFound(err) {
+			endpointGone = true
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if !endpointGone {
+		it.t.Fatalf("Theia endpoint:%s did not disappear in time", theiaName)
+		return
+	}
 
 	return
 }
