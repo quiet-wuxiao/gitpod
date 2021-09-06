@@ -443,7 +443,7 @@ func (m *Manager) extractStatusFromPod(result *api.WorkspaceStatus, wso workspac
 	}
 
 	status := pod.Status
-	log.WithField("pod", pod).Info("extracting status pod status:%#v", status)
+	log.WithField("pod", pod).Infof("extracting status pod status:%#v", status)
 	if status.Phase == corev1.PodPending {
 		// check if any container is still pulling images
 		for _, cs := range status.ContainerStatuses {
