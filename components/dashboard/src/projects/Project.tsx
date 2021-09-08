@@ -36,7 +36,7 @@ export default function () {
 
     useEffect(() => {
         updateProject();
-    }, [ teams ]);
+    }, [teams]);
 
     const updateProject = async () => {
         if (!teams || !projectName) {
@@ -112,7 +112,7 @@ export default function () {
     }
 
     const openPrebuild = (pb: PrebuildInfo) => {
-        history.push(`/${!!team ? 't/'+team.slug : 'projects'}/${projectName}/${pb.id}`);
+        history.push(`/${!!team ? 't/' + team.slug : 'projects'}/${projectName}/${pb.id}`);
     }
 
     const formatDate = (date: string | undefined) => {
@@ -133,57 +133,67 @@ export default function () {
                 <div className="py-3 pl-3">
                 </div>
             </div>
-            <ItemsList className="mt-2">
-                <Item header={true} className="grid grid-cols-3">
-                    <ItemField>
-                        <span>Branch</span>
-                    </ItemField>
-                    <ItemField>
-                        <span>Commit</span>
-                    </ItemField>
-                    <ItemField>
-                        <span>Prebuild</span>
-                        <ItemFieldContextMenu />
-                    </ItemField>
-                </Item>
-                {branches.filter(filter).slice(0, 10).map((branch, index) => {
-
-                    const branchName = branch.name;
-                    const prebuild = lastPrebuild(branch); // this might lazily trigger fetching of prebuild details
-
-                    const avatar = branch.changeAuthorAvatar && <img className="rounded-full w-4 h-4 inline-block align-text-bottom mr-2" src={branch.changeAuthorAvatar || ''} alt={branch.changeAuthor} />;
-                    const statusIcon = prebuildStatusIcon(prebuild?.status);
-                    const status = prebuildStatusLabel(prebuild?.status);
-
-                    return <Item key={`branch-${index}-${branchName}`} className="grid grid-cols-3 group">
-                        <ItemField className="flex items-center">
-                            <div>
-                                <div className="text-base text-gray-900 dark:text-gray-50 font-medium mb-1">
-                                    {branchName}
-                                    {branch.isDefault && (<span className="ml-2 self-center rounded-xl py-0.5 px-2 text-sm bg-blue-50 text-blue-40 dark:bg-blue-500 dark:text-blue-100">DEFAULT</span>)}
-                                </div>
-                            </div>
+            {branches.length === 0 ?
+                <div className="lg:px-28 px-10 flex flex-col space-y-2">
+                <div className="px-6 py-3 flex justify-between space-x-2 text-gray-400 border-t border-gray-200 dark:border-gray-800 h-96">
+                    <div className="flex flex-col items-center w-96 m-auto">
+                        <h3 className="text-center pb-3 text-gray-500 dark:text-gray-400">Fetching the recently active branches...</h3>
+                        <div className="text-center pb-6 text-gray-500">Please stay tuned, fetching can take a few seconds.</div>
+                    </div>
+                </div>
+            </div> :
+                <ItemsList className="mt-2">
+                    <Item header={true} className="grid grid-cols-3">
+                        <ItemField>
+                            <span>Branch</span>
                         </ItemField>
-                        <ItemField className="flex items-center">
-                            <div>
-                                <div className="text-base text-gray-500 dark:text-gray-50 font-medium mb-1">{shortCommitMessage(branch.changeTitle)}</div>
-                                <p>{avatar}Authored {formatDate(branch.changeDate)} · {branch.changeHash?.substring(0, 8)}</p>
-                            </div>
+                        <ItemField>
+                            <span>Commit</span>
                         </ItemField>
-                        <ItemField className="flex items-center">
-                            <div className="text-base text-gray-900 dark:text-gray-50 font-medium uppercase mb-1 cursor-pointer" onClick={() => prebuild && openPrebuild(prebuild.info)}>
-                                {prebuild ? (<><div className="inline-block align-text-bottom mr-2 w-4 h-4">{statusIcon}</div>{status}</>) : (<span> </span>)}
-                            </div>
-                            <span className="flex-grow" />
-                            <a href={gitpodHostUrl.withContext(`${branch.url}`).toString()}>
-                                <button className={`primary mr-2 py-2 opacity-0 group-hover:opacity-100`}>New Workspace</button>
-                            </a>
-                            <ItemFieldContextMenu className="py-0.5" menuEntries={branchContextMenu(branch)} />
+                        <ItemField>
+                            <span>Prebuild</span>
+                            <ItemFieldContextMenu />
                         </ItemField>
                     </Item>
-                }
-                )}
-            </ItemsList>
+                    {branches.filter(filter).slice(0, 10).map((branch, index) => {
+
+                        const branchName = branch.name;
+                        const prebuild = lastPrebuild(branch); // this might lazily trigger fetching of prebuild details
+
+                        const avatar = branch.changeAuthorAvatar && <img className="rounded-full w-4 h-4 inline-block align-text-bottom mr-2" src={branch.changeAuthorAvatar || ''} alt={branch.changeAuthor} />;
+                        const statusIcon = prebuildStatusIcon(prebuild?.status);
+                        const status = prebuildStatusLabel(prebuild?.status);
+
+                        return <Item key={`branch-${index}-${branchName}`} className="grid grid-cols-3 group">
+                            <ItemField className="flex items-center">
+                                <div>
+                                    <div className="text-base text-gray-900 dark:text-gray-50 font-medium mb-1">
+                                        {branchName}
+                                        {branch.isDefault && (<span className="ml-2 self-center rounded-xl py-0.5 px-2 text-sm bg-blue-50 text-blue-40 dark:bg-blue-500 dark:text-blue-100">DEFAULT</span>)}
+                                    </div>
+                                </div>
+                            </ItemField>
+                            <ItemField className="flex items-center">
+                                <div>
+                                    <div className="text-base text-gray-500 dark:text-gray-50 font-medium mb-1">{shortCommitMessage(branch.changeTitle)}</div>
+                                    <p>{avatar}Authored {formatDate(branch.changeDate)} · {branch.changeHash?.substring(0, 8)}</p>
+                                </div>
+                            </ItemField>
+                            <ItemField className="flex items-center">
+                                <div className="text-base text-gray-900 dark:text-gray-50 font-medium uppercase mb-1 cursor-pointer" onClick={() => prebuild && openPrebuild(prebuild.info)}>
+                                    {prebuild ? (<><div className="inline-block align-text-bottom mr-2 w-4 h-4">{statusIcon}</div>{status}</>) : (<span> </span>)}
+                                </div>
+                                <span className="flex-grow" />
+                                <a href={gitpodHostUrl.withContext(`${branch.url}`).toString()}>
+                                    <button className={`primary mr-2 py-2 opacity-0 group-hover:opacity-100`}>New Workspace</button>
+                                </a>
+                                <ItemFieldContextMenu className="py-0.5" menuEntries={branchContextMenu(branch)} />
+                            </ItemField>
+                        </Item>
+                    }
+                    )}
+                </ItemsList>
+            }
         </div>
 
     </>;
