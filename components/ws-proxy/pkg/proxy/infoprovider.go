@@ -265,7 +265,7 @@ func (p *RemoteWorkspaceInfoProvider) listen(client wsapi.WorkspaceManagerClient
 			continue
 		}
 
-		log.WithField(status).Info("received status update")
+		log.WithField("status", status).Info("received status update")
 		if status.Phase == wsapi.WorkspacePhase_STOPPED {
 			p.cache.Delete(status.Metadata.MetaId)
 		} else {
