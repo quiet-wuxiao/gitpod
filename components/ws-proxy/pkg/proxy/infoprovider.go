@@ -19,6 +19,7 @@ import (
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	common_grpc "github.com/gitpod-io/gitpod/common-go/grpc"
 	"github.com/gitpod-io/gitpod/common-go/log"
@@ -78,8 +79,9 @@ type WorkspaceInfo struct {
 	// (parsed from URL)
 	IDEPublicPort string
 
-	Ports []PortInfo
-	Auth  *wsapi.WorkspaceAuthentication
+	Ports     []PortInfo
+	Auth      *wsapi.WorkspaceAuthentication
+	StartedAt *timestamppb.Timestamp
 }
 
 // PortInfo contains all information ws-proxy needs to know about a workspace port
@@ -267,7 +269,7 @@ func (p *RemoteWorkspaceInfoProvider) listen(client wsapi.WorkspaceManagerClient
 
 		log.WithField("status", status).Info("received status update")
 		if status.Phase == wsapi.WorkspacePhase_STOPPED {
-			p.cache.Delete(status.Metadata.MetaId)
+			p.cache.Delete(status.Metadata.MetaId, status.Metadata.StartedAt)
 		} else {
 			info := mapWorkspaceStatusToInfo(status)
 			p.cache.Insert(info)
@@ -303,6 +305,7 @@ func mapWorkspaceStatusToInfo(status *wsapi.WorkspaceStatus) *WorkspaceInfo {
 		})
 	}
 
+	log.WithField("status", status).Info("mapping to info")
 	return &WorkspaceInfo{
 		WorkspaceID:   status.Metadata.MetaId,
 		InstanceID:    status.Id,
@@ -311,6 +314,7 @@ func mapWorkspaceStatusToInfo(status *wsapi.WorkspaceStatus) *WorkspaceInfo {
 		IDEPublicPort: getPortStr(status.Spec.Url),
 		Ports:         portInfos,
 		Auth:          status.Auth,
+		StartedAt:     status.Metadata.StartedAt,
 	}
 }
 
@@ -402,6 +406,19 @@ func (c *workspaceInfoCache) Insert(info *WorkspaceInfo) {
 }
 
 func (c *workspaceInfoCache) doInsert(info *WorkspaceInfo) {
+	existing := c.infos[info.WorkspaceID]
+	if existing != nil {
+		// Do not insert if the current workspace is newer
+		// This works around issues when a workspace is deleted then restarted in quick succession
+		// and the stopping event occurs after the replocement pod is started
+		log.WithField("new", info).WithField("existing", existing).Info("checking insert of workspace")
+		if existing.StartedAt != nil && info.StartedAt != nil {
+			if existing.StartedAt.AsTime().After(info.StartedAt.AsTime()) {
+				log.WithField("workspaceID", existing.WorkspaceID).Info("ignoring insert of older workspace")
+				return
+			}
+		}
+	}
 	c.infos[info.WorkspaceID] = info
 	c.coordsByPublicPort[info.IDEPublicPort] = &WorkspaceCoords{
 		ID: info.WorkspaceID,
@@ -415,12 +432,20 @@ func (c *workspaceInfoCache) doInsert(info *WorkspaceInfo) {
 	}
 }
 
-func (c *workspaceInfoCache) Delete(workspaceID string) {
+func (c *workspaceInfoCache) Delete(workspaceID string, startedAt *timestamppb.Timestamp) {
 	c.cond.L.Lock()
 	defer c.cond.L.Unlock()
 
 	info, present := c.infos[workspaceID]
 	if !present || info == nil {
+		return
+	}
+	// Do not delete if the current workspace info is newer
+	// This works around issues when a workspace is deleted then restarted in quick succession
+	// and the delete event occurs after the replocement pod is started
+	log.WithField("workspaceID", workspaceID).WithField("startedAt", startedAt).WithField("info", info).Info("checking delete of workspace")
+	if startedAt != nil && info.StartedAt.AsTime().After(startedAt.AsTime()) {
+		log.WithField("workspaceID", workspaceID).WithField("startedAt", startedAt).WithField("info", info).Info("ignoring delete of older workspace")
 		return
 	}
 	delete(c.coordsByPublicPort, info.IDEPublicPort)
