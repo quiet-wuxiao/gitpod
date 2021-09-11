@@ -144,6 +144,8 @@ export interface ConfigSerialized {
 
     vsxRegistryUrl: string;
 
+    ideaIUURL: string;
+
     /**
      * Payment related options
      */
