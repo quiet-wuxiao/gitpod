@@ -28,6 +28,7 @@ import (
 	common_grpc "github.com/gitpod-io/gitpod/common-go/grpc"
 	"github.com/gitpod-io/gitpod/common-go/log"
 	"github.com/gitpod-io/gitpod/common-go/pprof"
+	"github.com/gitpod-io/gitpod/registry-facade/pkg/config"
 	"github.com/gitpod-io/gitpod/registry-facade/pkg/registry"
 )
 
@@ -40,7 +41,7 @@ var runCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		configPath := args[0]
-		cfg, err := getConfig(configPath)
+		cfg, err := config.GetConfig(configPath)
 		if err != nil {
 			log.WithError(err).WithField("filename", configPath).Fatal("cannot load config")
 		}
@@ -180,7 +181,7 @@ func watchConfig(fn string, reg *registry.Registry) {
 		return hex.EncodeToString(h.Sum(nil)), nil
 	}
 	reloadConfig := func() error {
-		cfg, err := getConfig(fn)
+		cfg, err := config.GetConfig(fn)
 		if err != nil {
 			return err
 		}
