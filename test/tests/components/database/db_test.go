@@ -12,18 +12,16 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 )
 
 func TestBuiltinUserExists(t *testing.T) {
-	builtinUser := features.New("database").
+	database := features.New("database").
 		WithLabel("component", "database").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should exists a builtin user workspace", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			db, err := api.DB()
 			if err != nil {
@@ -52,13 +50,7 @@ func TestBuiltinUserExists(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
-	testEnv.Test(t, builtinUser)
+	testEnv.Test(t, database)
 }

@@ -20,7 +20,6 @@ import (
 
 	content_service_api "github.com/gitpod-io/gitpod/content-service/api"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 )
 
 var (
@@ -65,12 +64,11 @@ func TestUploadUrl(t *testing.T) {
 
 	uploadUrlRequest := features.New("UploadUrlRequest").
 		WithLabel("component", "content-service").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should run content-service tests", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			bs, err := api.BlobService()
 			if err != nil {
@@ -104,12 +102,6 @@ func TestUploadUrl(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
 	testEnv.Test(t, uploadUrlRequest)
@@ -132,12 +124,11 @@ func TestDownloadUrl(t *testing.T) {
 
 	downloadUrl := features.New("DownloadUrl").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should pass download URL tests", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			bs, err := api.BlobService()
 			if err != nil {
@@ -171,26 +162,19 @@ func TestDownloadUrl(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
 	testEnv.Test(t, downloadUrl)
 }
 
 func TestUploadDownloadBlob(t *testing.T) {
-	builtinUser := features.New("UploadDownloadBlob").
+	uploadDownloadBlob := features.New("UploadDownloadBlob").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should upload and download blob", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			blobContent := fmt.Sprintf("Hello Blobs! It's %s!", time.Now())
 
@@ -222,27 +206,20 @@ func TestUploadDownloadBlob(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
-	testEnv.Test(t, builtinUser)
+	testEnv.Test(t, uploadDownloadBlob)
 }
 
 // TestUploadDownloadBlobViaServer uploads a blob via server → content-server and downloads it afterwards
 func TestUploadDownloadBlobViaServer(t *testing.T) {
-	builtinUser := features.New("UploadDownloadBlobViaServer").
+	uploadDownloadBlobViaServer := features.New("UploadDownloadBlobViaServer").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should uploads a blob via server → content-server and downloads it afterwards", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			blobContent := fmt.Sprintf("Hello Blobs! It's %s!", time.Now())
 
@@ -274,19 +251,13 @@ func TestUploadDownloadBlobViaServer(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
-	testEnv.Test(t, builtinUser)
+	testEnv.Test(t, uploadDownloadBlobViaServer)
 }
 
 func uploadBlob(t *testing.T, url string, content string) {
-	client := &http.Client{}
+	var client = &http.Client{Timeout: time.Second * 10}
 	httpreq, err := http.NewRequest(http.MethodPut, url, strings.NewReader(content))
 	if err != nil {
 		t.Fatalf("cannot create HTTP PUT request: %q", err)

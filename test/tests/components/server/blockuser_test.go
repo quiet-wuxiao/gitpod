@@ -16,18 +16,16 @@ import (
 
 	protocol "github.com/gitpod-io/gitpod/gitpod-protocol"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 )
 
 func TestAdminBlockUser(t *testing.T) {
 	blockUser := features.New("block user").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should block new created user", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			rand.Seed(time.Now().UnixNano())
 			randN := rand.Intn(1000)
@@ -78,12 +76,6 @@ func TestAdminBlockUser(t *testing.T) {
 			if !blocked {
 				t.Fatalf("expected user '%s' with ID %s is blocked, but is not", username, userId)
 			}
-
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
 
 			return ctx
 		}).

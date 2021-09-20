@@ -13,18 +13,16 @@ import (
 
 	agent "github.com/gitpod-io/gitpod/test/pkg/agent/workspace/api"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 )
 
 func TestRunDocker(t *testing.T) {
-	builtinUser := features.New("docker").
+	docker := features.New("docker").
 		WithLabel("component", "workspace").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should start a container", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			ws, err := integration.LaunchWorkspaceDirectly(ctx, api)
 			if err != nil {
@@ -62,13 +60,7 @@ func TestRunDocker(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
-	testEnv.Test(t, builtinUser)
+	testEnv.Test(t, docker)
 }

@@ -14,7 +14,6 @@ import (
 
 	agent "github.com/gitpod-io/gitpod/test/pkg/agent/workspace/api"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 	"github.com/gitpod-io/gitpod/test/tests/workspace/common"
 )
 
@@ -98,12 +97,11 @@ func TestGitActions(t *testing.T) {
 
 	gitActions := features.New("GitActions").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it can run git actions", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			for _, test := range tests {
 				t.Run(test.ContextURL, func(t *testing.T) {
@@ -137,12 +135,6 @@ func TestGitActions(t *testing.T) {
 					}
 				})
 			}
-
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
 
 			return ctx
 		}).

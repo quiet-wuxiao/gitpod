@@ -7,7 +7,6 @@ package wsmanager
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"testing"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	supervisor "github.com/gitpod-io/gitpod/supervisor/api"
 	agent "github.com/gitpod-io/gitpod/test/pkg/agent/workspace/api"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 	wsmanapi "github.com/gitpod-io/gitpod/ws-manager/api"
 )
 
@@ -48,12 +46,11 @@ func TestRegularWorkspaceTasks(t *testing.T) {
 	workspaceTasks := features.New("ws-manager").
 		WithLabel("component", "ws-manager").
 		WithLabel("type", "tasks").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it can run workspace tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			for _, test := range tests {
 				t.Run(test.Name, func(t *testing.T) {
@@ -77,7 +74,6 @@ func TestRegularWorkspaceTasks(t *testing.T) {
 					}
 
 					t.Cleanup(func() {
-						log.Printf("Using t.Cleanup")
 						_ = integration.DeleteWorkspace(ctx, api, nfo.Req.Id)
 					})
 
@@ -137,12 +133,6 @@ func TestRegularWorkspaceTasks(t *testing.T) {
 					}
 				})
 			}
-
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
 
 			return ctx
 		}).

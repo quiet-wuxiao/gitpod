@@ -13,18 +13,16 @@ import (
 
 	agent "github.com/gitpod-io/gitpod/test/pkg/agent/workspace/api"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 )
 
 func TestWorkspaceInstrumentation(t *testing.T) {
 	instrumentation := features.New("instrumentation").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it can instrument a workspace", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			nfo, stopWs, err := integration.LaunchWorkspaceFromContextURL(ctx, "github.com/gitpod-io/gitpod", api)
 			if err != nil {
@@ -52,12 +50,6 @@ func TestWorkspaceInstrumentation(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
 	testEnv.Test(t, instrumentation)
@@ -66,12 +58,11 @@ func TestWorkspaceInstrumentation(t *testing.T) {
 func TestLaunchWorkspaceDirectly(t *testing.T) {
 	launchWorkspace := features.New("workspace").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it can run workspace tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			nfo, err := integration.LaunchWorkspaceDirectly(ctx, api)
 			if err != nil {
@@ -82,12 +73,6 @@ func TestLaunchWorkspaceDirectly(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
 
 			return ctx
 		}).

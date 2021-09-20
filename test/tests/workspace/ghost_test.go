@@ -12,19 +12,17 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 	wsmanapi "github.com/gitpod-io/gitpod/ws-manager/api"
 )
 
 func TestGhostWorkspace(t *testing.T) {
 	ghostWorkspace := features.New("ghost").
 		WithLabel("component", "ws-manager").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it can start a ghost workspace", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			// there's nothing specific about ghost that we want to test beyond that they start properly
 			ws, err := integration.LaunchWorkspaceDirectly(ctx, api, integration.WithRequestModifier(func(req *wsmanapi.StartWorkspaceRequest) error {
@@ -48,12 +46,6 @@ func TestGhostWorkspace(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
 			return ctx
 		}).
 		Feature()

@@ -14,7 +14,6 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 	"github.com/gitpod-io/gitpod/test/tests/workspace/common"
 )
 
@@ -94,15 +93,14 @@ func TestGitLabContexts(t *testing.T) {
 func runContextTests(t *testing.T, tests []ContextTest) {
 	contextFeat := features.New("context").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("should run context tests", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
 
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			for _, test := range tests {
 				t.Run(test.ContextURL, func(t *testing.T) {
@@ -153,12 +151,6 @@ func runContextTests(t *testing.T, tests []ContextTest) {
 					}
 				})
 			}
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
 			return ctx
 		}).
 		Feature()

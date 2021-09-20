@@ -17,18 +17,16 @@ import (
 	csapi "github.com/gitpod-io/gitpod/content-service/api"
 	imgapi "github.com/gitpod-io/gitpod/image-builder/api"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 )
 
 func TestBaseImageBuild(t *testing.T) {
-	builtinUser := features.New("database").
+	imageBuild := features.New("database").
 		WithLabel("component", "image-builder").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should build a base image", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			client, err := api.ImageBuilder(integration.SelectImageBuilderMK3)
 			if err != nil {
@@ -85,15 +83,9 @@ func TestBaseImageBuild(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
-	testEnv.Test(t, builtinUser)
+	testEnv.Test(t, imageBuild)
 }
 
 func TestParallelBaseImageBuild(t *testing.T) {
@@ -101,12 +93,11 @@ func TestParallelBaseImageBuild(t *testing.T) {
 
 	parallelBuild := features.New("image-builder").
 		WithLabel("component", "image-builder").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should allow parallel build of images", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			client, err := api.ImageBuilder(integration.SelectImageBuilderMK3)
 			if err != nil {
@@ -187,12 +178,6 @@ func TestParallelBaseImageBuild(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
 
 			return ctx
 		}).

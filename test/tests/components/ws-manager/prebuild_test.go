@@ -12,19 +12,17 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 	wsmanapi "github.com/gitpod-io/gitpod/ws-manager/api"
 )
 
 func TestPrebuildWorkspaceTaskSuccess(t *testing.T) {
 	prebuild := features.New("prebuild").
 		WithLabel("component", "ws-manager").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should create a prebuild and succeed the defined tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			ws, err := integration.LaunchWorkspaceDirectly(ctx, api, integration.WithRequestModifier(func(req *wsmanapi.StartWorkspaceRequest) error {
 				req.Type = wsmanapi.WorkspaceType_PREBUILD
@@ -45,12 +43,6 @@ func TestPrebuildWorkspaceTaskSuccess(t *testing.T) {
 
 			return ctx
 		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
-			return ctx
-		}).
 		Feature()
 
 	testEnv.Test(t, prebuild)
@@ -59,12 +51,11 @@ func TestPrebuildWorkspaceTaskSuccess(t *testing.T) {
 func TestPrebuildWorkspaceTaskFail(t *testing.T) {
 	prebuild := features.New("prebuild").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it should create a prebuild and fail after running the defined tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			ws, err := integration.LaunchWorkspaceDirectly(ctx, api, integration.WithRequestModifier(func(req *wsmanapi.StartWorkspaceRequest) error {
 				req.Type = wsmanapi.WorkspaceType_PREBUILD
@@ -90,12 +81,6 @@ func TestPrebuildWorkspaceTaskFail(t *testing.T) {
 			if err != nil {
 				t.Fatalf("cannot stop workspace: %q", err)
 			}
-
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
 
 			return ctx
 		}).

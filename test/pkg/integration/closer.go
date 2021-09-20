@@ -4,13 +4,16 @@
 
 package integration
 
-import "testing"
+import (
+	"testing"
+)
 
 func DeferCloser(t *testing.T, closer []func() error) {
 	// Much "defer", we run the closer in reversed order. This way, we can
 	// append to this list quite naturally, and still break things down in
 	// the correct order.
 	t.Cleanup(func() {
+		t.Log("Using t.Cleanup")
 		for i := len(closer) - 1; i >= 0; i-- {
 			err := closer[i]()
 			if err != nil {

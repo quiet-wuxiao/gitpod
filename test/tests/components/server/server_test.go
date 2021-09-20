@@ -14,19 +14,16 @@ import (
 
 	protocol "github.com/gitpod-io/gitpod/gitpod-protocol"
 	"github.com/gitpod-io/gitpod/test/pkg/integration"
-	test_context "github.com/gitpod-io/gitpod/test/pkg/integration/context"
 )
 
 func TestServerAccess(t *testing.T) {
 	getLoggedInUser := features.New("GetLoggedInUser").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it can get a not built-in logged user", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			defer api.Done(t)
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			server, err := api.GitpodServer()
 			if err != nil {
@@ -48,12 +45,11 @@ func TestServerAccess(t *testing.T) {
 func TestStartWorkspace(t *testing.T) {
 	startWorkspace := features.New("CreateWorkspace").
 		WithLabel("component", "server").
-		Setup(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
-			return test_context.SetComponentAPI(ctx, api)
-		}).
 		Assess("it can run workspace tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
+			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
+			t.Cleanup(func() {
+				api.Done(t)
+			})
 
 			server, err := api.GitpodServer()
 			if err != nil {
@@ -93,12 +89,6 @@ func TestStartWorkspace(t *testing.T) {
 			}
 
 			t.Logf("workspace is running: instanceID=%s", nfo.LatestInstance.ID)
-			return ctx
-		}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			api := test_context.GetComponentAPI(ctx)
-			defer api.Done(t)
-
 			return ctx
 		}).
 		Feature()
