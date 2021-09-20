@@ -62,7 +62,7 @@ func TestUploadUrl(t *testing.T) {
 		},
 	}
 
-	uploadUrlRequest := features.New("UploadUrlRequest").
+	f := features.New("UploadUrlRequest").
 		WithLabel("component", "content-service").
 		Assess("it should run content-service tests", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -104,7 +104,7 @@ func TestUploadUrl(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, uploadUrlRequest)
+	testEnv.Test(t, f)
 }
 
 func TestDownloadUrl(t *testing.T) {
@@ -122,7 +122,7 @@ func TestDownloadUrl(t *testing.T) {
 		},
 	}
 
-	downloadUrl := features.New("DownloadUrl").
+	f := features.New("DownloadUrl").
 		WithLabel("component", "server").
 		Assess("it should pass download URL tests", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -164,11 +164,11 @@ func TestDownloadUrl(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, downloadUrl)
+	testEnv.Test(t, f)
 }
 
 func TestUploadDownloadBlob(t *testing.T) {
-	uploadDownloadBlob := features.New("UploadDownloadBlob").
+	f := features.New("UploadDownloadBlob").
 		WithLabel("component", "server").
 		Assess("it should upload and download blob", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -208,12 +208,12 @@ func TestUploadDownloadBlob(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, uploadDownloadBlob)
+	testEnv.Test(t, f)
 }
 
 // TestUploadDownloadBlobViaServer uploads a blob via server → content-server and downloads it afterwards
 func TestUploadDownloadBlobViaServer(t *testing.T) {
-	uploadDownloadBlobViaServer := features.New("UploadDownloadBlobViaServer").
+	f := features.New("UploadDownloadBlobViaServer").
 		WithLabel("component", "server").
 		Assess("it should uploads a blob via server → content-server and downloads it afterwards", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -253,7 +253,7 @@ func TestUploadDownloadBlobViaServer(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, uploadDownloadBlobViaServer)
+	testEnv.Test(t, f)
 }
 
 func uploadBlob(t *testing.T, url string, content string) {

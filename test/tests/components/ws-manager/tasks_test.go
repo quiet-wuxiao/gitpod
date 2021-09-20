@@ -43,7 +43,7 @@ func TestRegularWorkspaceTasks(t *testing.T) {
 		},
 	}
 
-	workspaceTasks := features.New("ws-manager").
+	f := features.New("ws-manager").
 		WithLabel("component", "ws-manager").
 		WithLabel("type", "tasks").
 		Assess("it can run workspace tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -138,5 +138,5 @@ func TestRegularWorkspaceTasks(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, workspaceTasks)
+	testEnv.Test(t, f)
 }

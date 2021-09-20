@@ -16,7 +16,7 @@ import (
 )
 
 func TestRunDocker(t *testing.T) {
-	docker := features.New("docker").
+	f := features.New("docker").
 		WithLabel("component", "workspace").
 		Assess("it should start a container", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -62,5 +62,5 @@ func TestRunDocker(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, docker)
+	testEnv.Test(t, f)
 }

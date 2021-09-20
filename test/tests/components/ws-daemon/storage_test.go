@@ -18,7 +18,7 @@ import (
 )
 
 func TestCreateBucket(t *testing.T) {
-	getWorkspaces := features.New("DaemonAgent.CreateBucket").
+	f := features.New("DaemonAgent.CreateBucket").
 		WithLabel("component", "ws-daemon").
 		Assess("it should create a bucket", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			rsa, closer, err := integration.Instrument(integration.ComponentWorkspaceDaemon, "daemon", cfg.Namespace(), cfg.Client(), integration.WithContainer("ws-daemon"))
@@ -40,5 +40,5 @@ func TestCreateBucket(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, getWorkspaces)
+	testEnv.Test(t, f)
 }

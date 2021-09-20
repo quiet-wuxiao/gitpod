@@ -21,7 +21,7 @@ import (
 
 // TestBackup tests a basic start/modify/restart cycle
 func TestBackup(t *testing.T) {
-	backup := features.New("backup").
+	f := features.New("backup").
 		Assess("it should start a workspace, create a file and successfully create a backup", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
@@ -120,13 +120,13 @@ func TestBackup(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, backup)
+	testEnv.Test(t, f)
 
 }
 
 // TestMissingBackup ensures workspaces fail if they should have a backup but don't have one
 func TestMissingBackup(t *testing.T) {
-	startWorkspace := features.New("CreateWorkspace").
+	f := features.New("CreateWorkspace").
 		WithLabel("component", "server").
 		Assess("it can run workspace tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -208,5 +208,5 @@ func TestMissingBackup(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, startWorkspace)
+	testEnv.Test(t, f)
 }

@@ -20,7 +20,7 @@ import (
 )
 
 func TestBaseImageBuild(t *testing.T) {
-	imageBuild := features.New("database").
+	f := features.New("database").
 		WithLabel("component", "image-builder").
 		Assess("it should build a base image", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -85,13 +85,13 @@ func TestBaseImageBuild(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, imageBuild)
+	testEnv.Test(t, f)
 }
 
 func TestParallelBaseImageBuild(t *testing.T) {
 	t.Skip("Skipping...")
 
-	parallelBuild := features.New("image-builder").
+	f := features.New("image-builder").
 		WithLabel("component", "image-builder").
 		Assess("it should allow parallel build of images", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -183,5 +183,5 @@ func TestParallelBaseImageBuild(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, parallelBuild)
+	testEnv.Test(t, f)
 }

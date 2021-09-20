@@ -17,7 +17,7 @@ import (
 )
 
 func TestServerAccess(t *testing.T) {
-	getLoggedInUser := features.New("GetLoggedInUser").
+	f := features.New("GetLoggedInUser").
 		WithLabel("component", "server").
 		Assess("it can get a not built-in logged user", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -39,11 +39,11 @@ func TestServerAccess(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, getLoggedInUser)
+	testEnv.Test(t, f)
 }
 
 func TestStartWorkspace(t *testing.T) {
-	startWorkspace := features.New("CreateWorkspace").
+	f := features.New("CreateWorkspace").
 		WithLabel("component", "server").
 		Assess("it can run workspace tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -93,5 +93,5 @@ func TestStartWorkspace(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, startWorkspace)
+	testEnv.Test(t, f)
 }

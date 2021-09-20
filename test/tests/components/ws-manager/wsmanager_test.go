@@ -16,7 +16,7 @@ import (
 )
 
 func TestGetWorkspaces(t *testing.T) {
-	getWorkspaces := features.New("workspaces").
+	f := features.New("workspaces").
 		WithLabel("component", "ws-manager").
 		Assess("it should get workspaces", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -38,5 +38,5 @@ func TestGetWorkspaces(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, getWorkspaces)
+	testEnv.Test(t, f)
 }

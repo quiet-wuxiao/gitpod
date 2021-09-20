@@ -95,7 +95,7 @@ func TestGitActions(t *testing.T) {
 		},
 	}
 
-	gitActions := features.New("GitActions").
+	f := features.New("GitActions").
 		WithLabel("component", "server").
 		Assess("it can run git actions", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -140,5 +140,5 @@ func TestGitActions(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, gitActions)
+	testEnv.Test(t, f)
 }

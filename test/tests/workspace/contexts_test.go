@@ -91,7 +91,7 @@ func TestGitLabContexts(t *testing.T) {
 }
 
 func runContextTests(t *testing.T, tests []ContextTest) {
-	contextFeat := features.New("context").
+	f := features.New("context").
 		WithLabel("component", "server").
 		Assess("should run context tests", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -155,5 +155,5 @@ func runContextTests(t *testing.T, tests []ContextTest) {
 		}).
 		Feature()
 
-	testEnv.Test(t, contextFeat)
+	testEnv.Test(t, f)
 }

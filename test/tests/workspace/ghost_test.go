@@ -16,7 +16,7 @@ import (
 )
 
 func TestGhostWorkspace(t *testing.T) {
-	ghostWorkspace := features.New("ghost").
+	f := features.New("ghost").
 		WithLabel("component", "ws-manager").
 		Assess("it can start a ghost workspace", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -50,5 +50,5 @@ func TestGhostWorkspace(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, ghostWorkspace)
+	testEnv.Test(t, f)
 }

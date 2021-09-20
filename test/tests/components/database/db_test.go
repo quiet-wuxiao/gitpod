@@ -15,7 +15,7 @@ import (
 )
 
 func TestBuiltinUserExists(t *testing.T) {
-	database := features.New("database").
+	f := features.New("database").
 		WithLabel("component", "database").
 		Assess("it should exists a builtin user workspace", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -52,5 +52,5 @@ func TestBuiltinUserExists(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, database)
+	testEnv.Test(t, f)
 }

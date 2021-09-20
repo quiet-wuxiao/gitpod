@@ -19,7 +19,7 @@ import (
 )
 
 func TestAdminBlockUser(t *testing.T) {
-	blockUser := features.New("block user").
+	f := features.New("block user").
 		WithLabel("component", "server").
 		Assess("it should block new created user", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -81,5 +81,5 @@ func TestAdminBlockUser(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, blockUser)
+	testEnv.Test(t, f)
 }

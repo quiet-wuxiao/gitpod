@@ -16,7 +16,7 @@ import (
 )
 
 func TestWorkspaceInstrumentation(t *testing.T) {
-	instrumentation := features.New("instrumentation").
+	f := features.New("instrumentation").
 		WithLabel("component", "server").
 		Assess("it can instrument a workspace", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -52,11 +52,11 @@ func TestWorkspaceInstrumentation(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, instrumentation)
+	testEnv.Test(t, f)
 }
 
 func TestLaunchWorkspaceDirectly(t *testing.T) {
-	launchWorkspace := features.New("workspace").
+	f := features.New("workspace").
 		WithLabel("component", "server").
 		Assess("it can run workspace tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -78,5 +78,5 @@ func TestLaunchWorkspaceDirectly(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, launchWorkspace)
+	testEnv.Test(t, f)
 }

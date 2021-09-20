@@ -16,7 +16,7 @@ import (
 )
 
 func TestPrebuildWorkspaceTaskSuccess(t *testing.T) {
-	prebuild := features.New("prebuild").
+	f := features.New("prebuild").
 		WithLabel("component", "ws-manager").
 		Assess("it should create a prebuild and succeed the defined tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -45,11 +45,11 @@ func TestPrebuildWorkspaceTaskSuccess(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, prebuild)
+	testEnv.Test(t, f)
 }
 
 func TestPrebuildWorkspaceTaskFail(t *testing.T) {
-	prebuild := features.New("prebuild").
+	f := features.New("prebuild").
 		WithLabel("component", "server").
 		Assess("it should create a prebuild and fail after running the defined tasks", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			api := integration.NewComponentAPI(ctx, cfg.Namespace(), cfg.Client())
@@ -86,5 +86,5 @@ func TestPrebuildWorkspaceTaskFail(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, prebuild)
+	testEnv.Test(t, f)
 }
