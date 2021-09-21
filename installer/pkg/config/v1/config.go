@@ -16,8 +16,10 @@ type Config struct {
 	Repository string           `json:"repository"`
 
 	Observability Observability `json:"observability"`
+	Analytics     *Analytics    `json:"analytics"`
 
-	Database Database `json:"database"`
+	Database   Database   `json:"database"`
+	MessageBus MessageBus `json:"messageBus"`
 
 	ObjectStorage ObjectStorage `json:"objectStorage"`
 
@@ -30,6 +32,9 @@ type Config struct {
 	InstallNetworkPolicies bool `json:"installNetworkPolicies"` // todo(sje): remove - this is always true
 
 	Workspace Workspace `json:"workspace"`
+
+	AuthProviders []AuthProviderConfigs `json:"authProviders"`
+	BlockNewUsers BlockNewUsers         `json:"blockNewUsers"`
 }
 
 type Metadata struct {
@@ -41,9 +46,17 @@ type Observability struct {
 	Tracing  *Tracing `json:"tracing"`
 }
 
+type Analytics struct {
+	SegmentKey string `json:"segmentKey"`
+	Writer     string `json:"writer"`
+}
+
 type Tracing struct {
 	Endpoint  *string `json:"endpoint,omitempty"`
 	AgentHost *string `json:"agentHost,omitempty"`
+}
+
+type MessageBus struct {
 }
 
 type Database struct {
@@ -149,3 +162,36 @@ const (
 	FSShiftFuseFS  FSShiftMethod = "fuse"
 	FSShiftShiftFS FSShiftMethod = "shiftfs"
 )
+
+// todo(sje): I don't know if we want to put this in the config YAML
+type AuthProviderConfigs struct {
+	BuiltIn             string            `json:"builtin"`
+	Verified            string            `json:"verified"`
+	OAuth               OAuth             `json:"oauth"`
+	Params              map[string]string `json:"params"`
+	HiddenOnDashboard   bool              `json:"hiddenOnDashboard"`
+	LoginContextMatcher string            `json:"loginContextMatcher"`
+	DisallowLogin       bool              `json:"disallowLogin"`
+	RequireTOS          bool              `json:"requireTOS"`
+	Description         string            `json:"description"`
+	Icon                string            `json:"icon"`
+}
+
+type BlockNewUsers struct {
+	Enabled  bool     `json:"enabled"`
+	Passlist []string `json:"passlist"`
+}
+
+type OAuth struct {
+	ClientId            string            `json:"clientId"`
+	ClientSecret        string            `json:"clientSecret"`
+	CallBackUrl         string            `json:"callBackUrl"`
+	AuthorizationUrl    string            `json:"authorizationUrl"`
+	TokenUrl            string            `json:"tokenUrl"`
+	Scope               string            `json:"scope"`
+	ScopeSeparator      string            `json:"scopeSeparator"`
+	SettingsUrl         string            `json:"settingsUrl"`
+	AuthorizationParams map[string]string `json:"authorizationParams"`
+	ConfigURL           string            `json:"configURL"`
+	ConfigFn            string            `json:"configFn"`
+}

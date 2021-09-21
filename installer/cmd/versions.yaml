@@ -52,6 +52,9 @@ components:
     codeImage:
       version: not-a-valid-version
 
+    codeImageStable:
+      version: not-a-valid-version
+
     dockerUp:
       version: not-a-valid-version
 

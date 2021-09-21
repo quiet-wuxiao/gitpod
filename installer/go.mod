@@ -3,6 +3,7 @@ module github.com/gitpod-io/gitpod/installer
 go 1.16
 
 require (
+	github.com/Masterminds/goutils v1.1.1
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/gitpod-io/gitpod/agent-smith v0.0.0-00010101000000-000000000000
 	github.com/gitpod-io/gitpod/blobserve v0.0.0-00010101000000-000000000000

@@ -33,9 +33,10 @@ type Components struct {
 	Server           Versioned `json:"server"`
 	ServiceWaiter    Versioned `json:"serviceWaiter"`
 	Workspace        struct {
-		CodeImage  Versioned `json:"codeImage"`
-		DockerUp   Versioned `json:"dockerUp"`
-		Supervisor Versioned `json:"supervisor"`
+		CodeImage       Versioned `json:"codeImage"`
+		CodeImageStable Versioned `json:"codeImageStable"`
+		DockerUp        Versioned `json:"dockerUp"`
+		Supervisor      Versioned `json:"supervisor"`
 	} `json:"workspace"`
 	WSDaemon struct {
 		Versioned

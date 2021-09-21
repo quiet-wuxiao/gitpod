@@ -76,6 +76,33 @@ func TracingEnv(cfg *config.Config) (res []corev1.EnvVar) {
 	return
 }
 
+func AnalyticsEnv(cfg *config.Config) (res []corev1.EnvVar) {
+	if cfg.Analytics == nil {
+		return
+	}
+
+	return []corev1.EnvVar{{
+		Name:  "GITPOD_ANALYTICS_WRITER",
+		Value: cfg.Analytics.Writer,
+	}, {
+		Name:  "GITPOD_ANALYTICS_SEGMENT_KEY",
+		Value: cfg.Analytics.SegmentKey,
+	}}
+}
+
+// todo(sje): figure out how to put in the MessageBus config
+func MessageBusEnv(cfg *config.Config) (res []corev1.EnvVar) {
+	return []corev1.EnvVar{}
+}
+
+func DatabaseWaiterContainer() *corev1.Container {
+	return &corev1.Container{}
+}
+
+func MsgBusWaiterContainer() *corev1.Container {
+	return &corev1.Container{}
+}
+
 func KubeRBACProxyContainer() *corev1.Container {
 	return &corev1.Container{
 		Name:  "kube-rbac-proxy",
@@ -297,3 +324,9 @@ var (
 		Kind:       "PodSecurityPolicy",
 	}
 )
+
+type TLS struct {
+	Authority   string `json:"ca"`
+	Certificate string `json:"cert"`
+	Key         string `json:"key"`
+}
