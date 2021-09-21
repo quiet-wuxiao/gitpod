@@ -14,5 +14,6 @@ objectStorage:
     certificate:
       name: "gcp-sa"
 repository: "eu.gcr.io/gitpod-core-dev/build/"
-workspaceRuntime:
-  fsShiftMethod: "fuse"
+workspace:
+  runtime:
+    fsShiftMethod: "fuse"
