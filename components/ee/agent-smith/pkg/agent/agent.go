@@ -5,28 +5,19 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"net/url"
-	"os"
-	"path"
-	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
-	"github.com/cilium/ebpf/perf"
 	"github.com/gitpod-io/gitpod/agent-smith/pkg/bpf"
 	"github.com/gitpod-io/gitpod/agent-smith/pkg/signature"
 	"github.com/gitpod-io/gitpod/common-go/log"
 	"github.com/gitpod-io/gitpod/common-go/util"
 	gitpod "github.com/gitpod-io/gitpod/gitpod-protocol"
+	"github.com/gitpod-io/gitpod/ws-daemon/pkg/container"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/procfs"
@@ -51,6 +42,7 @@ type Smith struct {
 	GitpodAPI        gitpod.APIInterface
 	EnforcementRules map[string]EnforcementRules
 	Kubernetes       kubernetes.Interface
+	Runtime          container.Runtime
 	metrics          *metrics
 
 	notifiedInfringements *lru.Cache
@@ -108,6 +100,15 @@ type SlackWebhooks struct {
 	Warning string `json:"warning,omitempty"`
 }
 
+type Container struct {
+	// Runtime marks the container runtime we ought to connect to.
+	// Depending on the value set here we expect the corresponding config struct to have a value.
+	Runtime container.RuntimeType `json:"runtime"`
+
+	// Containerd contains the containerd CRI config if runtime == RuntimeContainerd
+	Containerd *container.ContainerdConfig `json:"containerd,omitempty"`
+}
+
 // NewAgentSmith creates a new agent smith
 func NewAgentSmith(cfg Config) (*Smith, error) {
 	notificationCache, err := lru.New(notificationCacheSize)
@@ -161,6 +162,14 @@ func NewAgentSmith(cfg Config) (*Smith, error) {
 		}
 	}
 
+	var runtime container.Runtime
+	if cfg.Container != nil {
+		runtime, err = container.NewContainerd(cfg.Container.Containerd, nil, make(map[string]string))
+		if err != nil {
+			return nil, xerrors.Errorf("cannot connect to containerd: %w", err)
+		}
+	}
+
 	m := newAgentMetrics()
 	pidsMap := syncMapCounter{}
 	pidsMap.WithCounter(m.currentlyMonitoredPIDS)
@@ -180,6 +189,7 @@ func NewAgentSmith(cfg Config) (*Smith, error) {
 		Config:                    cfg,
 		GitpodAPI:                 api,
 		Kubernetes:                clientset,
+		Runtime:                   runtime,
 		notifiedInfringements:     notificationCache,
 		perfHandler:               make(chan perfHandlerFunc, 10),
 		metrics:                   m,
@@ -363,16 +373,13 @@ func (er EnforcementRules) Validate() error {
 func (agent *Smith) Start(ctx context.Context, callback func(InfringingWorkspace, []PenaltyKind)) {
 	// todo(fntlnz): do the bpf loading here before running Run so that we have everything sorted out
 	abpf, err := bpf.LoadAndAttach(agent.Config.ProbePath)
-
 	if err != nil {
 		log.WithError(err).Fatal("error while loading and attaching bpf program")
 	}
-
 	defer abpf.Close()
 
-	go agent.cleanupDeadPIDS(ctx)
-
 	egressTicker := time.NewTicker(30 * time.Second)
+	psScanTicker := time.NewTicker(5 * time.Second)
 
 	for i := 0; i < 10; i++ {
 		go func(i int) {
@@ -439,58 +446,93 @@ func (agent *Smith) Start(ctx context.Context, callback func(InfringingWorkspace
 	}
 
 	for {
-		rec, err := abpf.Read()
-		if err != nil {
-			if perf.IsClosed(err) {
-				log.Error("perf buffer is closed")
-				return
-			}
-			log.WithError(err).Error("error reading from event perf buffer")
-		}
-		agent.processPerfRecord(rec)
-	}
-}
-
-func (agent *Smith) cleanupDeadPIDS(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
 		select {
-		case <-ticker.C:
-			agent.cleanupDeadPidsCallback()
 		case <-ctx.Done():
-			return
+			log.Info("agent stopped")
+			break
+		case <-psScanTicker.C:
+			err = agent.scanPsInWorkspaces(ctx)
+			if err != nil {
+				log.WithError(err).Error("error scanning ps in workspaces")
+			}
+			continue
 		}
 	}
+
+	// for {
+	// 	rec, err := abpf.Read()
+	// 	if err != nil {
+	// 		if perf.IsClosed(err) {
+	// 			log.Error("perf buffer is closed")
+	// 			return
+	// 		}
+	// 		log.WithError(err).Error("error reading from event perf buffer")
+	// 	}
+	// 	agent.processPerfRecord(rec)
+	// }
 }
 
-// cleanupDeadPidsCallback removes from pidsMap all the process IDs
-// that are not active anymore or don't have a workspace associated
-func (agent *Smith) cleanupDeadPidsCallback() {
-	agent.pidsMap.Range(func(key, value interface{}) bool {
-		p := key.(int)
+func (agent *Smith) scanPsInWorkspaces(ctx context.Context) error {
+	if agent.Config.Container == nil {
+		return nil
+	}
 
-		process, _ := os.FindProcess(p)
-		if process == nil {
-			agent.pidsMap.Delete(p)
-			return true
-		}
+	// get list of workspace containers from containerd
+	wss, err := agent.Runtime.ListWorkspaceContainers(ctx)
+	if err != nil {
+		return err
+	}
 
-		err := process.Signal(syscall.Signal(0))
-		if err != nil {
-			agent.pidsMap.Delete(p)
-			return true
-		}
+	for _, ws := range wss {
+		log.Debugf("found workspace container: %s/%s/%d", ws.ID, ws.InstanceID, ws.PID)
+	}
 
-		_, err = getWorkspaceFromProcess(p)
-		if err != nil {
-			agent.pidsMap.Delete(p)
-			return true
-		}
+	// run ps in each of them
 
-		return true
-	})
+	// parse output and send check closure over to perfHandler
+	return nil
 }
+
+// func (agent *Smith) cleanupDeadPIDS(ctx context.Context) {
+// 	ticker := time.NewTicker(30 * time.Second)
+// 	defer ticker.Stop()
+// 	for {
+// 		select {
+// 		case <-ticker.C:
+// 			agent.cleanupDeadPidsCallback()
+// 		case <-ctx.Done():
+// 			return
+// 		}
+// 	}
+// }
+
+// // cleanupDeadPidsCallback removes from pidsMap all the process IDs
+// // that are not active anymore or don't have a workspace associated
+// func (agent *Smith) cleanupDeadPidsCallback() {
+// 	agent.pidsMap.Range(func(key, value interface{}) bool {
+// 		p := key.(int)
+
+// 		process, _ := os.FindProcess(p)
+// 		if process == nil {
+// 			agent.pidsMap.Delete(p)
+// 			return true
+// 		}
+
+// 		err := process.Signal(syscall.Signal(0))
+// 		if err != nil {
+// 			agent.pidsMap.Delete(p)
+// 			return true
+// 		}
+
+// 		_, err = getWorkspaceFromProcess(p)
+// 		if err != nil {
+// 			agent.pidsMap.Delete(p)
+// 			return true
+// 		}
+
+// 		return true
+// 	})
+// }
 
 // Penalize acts on infringements and e.g. stops pods
 func (agent *Smith) Penalize(ws InfringingWorkspace) ([]PenaltyKind, error) {
@@ -586,14 +628,14 @@ type EventHeader struct {
 	NParams uint32 /* the number of parameters of the event */
 }
 
-func cStrLen(n []byte) int {
-	for i := 0; i < len(n); i++ {
-		if n[i] == 0 {
-			return i
-		}
-	}
-	return -1
-}
+// func cStrLen(n []byte) int {
+// 	for i := 0; i < len(n); i++ {
+// 		if n[i] == 0 {
+// 			return i
+// 		}
+// 	}
+// 	return -1
+// }
 
 type Execve struct {
 	Filename string
@@ -601,178 +643,178 @@ type Execve struct {
 	TID      int
 }
 
-// todo(fntlnz): move this to a package for parsers and write a test
-// todo(fntlnz): finish parsing arguments
-func parseExecveExit(evtHdr EventHeader, buffer []byte) Execve {
-	var i int16
-	dataOffsetPtr := unsafe.Sizeof(evtHdr) + unsafe.Sizeof(i)*uintptr(evtHdr.NParams) - 6 // todo(fntlnz): check why this -6 is necessary
-	scratchHeaderOffset := uint32(dataOffsetPtr)
+// // todo(fntlnz): move this to a package for parsers and write a test
+// // todo(fntlnz): finish parsing arguments
+// func parseExecveExit(evtHdr EventHeader, buffer []byte) Execve {
+// 	var i int16
+// 	dataOffsetPtr := unsafe.Sizeof(evtHdr) + unsafe.Sizeof(i)*uintptr(evtHdr.NParams) - 6 // todo(fntlnz): check why this -6 is necessary
+// 	scratchHeaderOffset := uint32(dataOffsetPtr)
 
-	//lint:ignore SA4006 this is used with unsafe.Sizeof
-	retval := int64(buffer[scratchHeaderOffset])
+// 	//lint:ignore SA4006 this is used with unsafe.Sizeof
+// 	retval := int64(buffer[scratchHeaderOffset])
 
-	// einfo := bpf.EventTable[bpf.PPME_SYSCALL_EXECVE_19_X]
+// 	// einfo := bpf.EventTable[bpf.PPME_SYSCALL_EXECVE_19_X]
 
-	scratchHeaderOffset += uint32(unsafe.Sizeof(retval))
-	command := buffer[scratchHeaderOffset:]
-	commandLen := cStrLen(command)
-	command = command[0:commandLen]
+// 	scratchHeaderOffset += uint32(unsafe.Sizeof(retval))
+// 	command := buffer[scratchHeaderOffset:]
+// 	commandLen := cStrLen(command)
+// 	command = command[0:commandLen]
 
-	scratchHeaderOffset += uint32(commandLen) + 1
-	var argv []string
-	rawParams := buffer[scratchHeaderOffset:]
-	byteSlice := bytes.Split(rawParams, rawParams[len(rawParams)-1:])
-	for _, b := range byteSlice {
-		if len(b) == 0 || bytes.HasPrefix(b, []byte("\\x")) {
-			break
-		}
-		if len(b) > 0 {
-			argv = append(argv, string(b))
-		}
-	}
+// 	scratchHeaderOffset += uint32(commandLen) + 1
+// 	var argv []string
+// 	rawParams := buffer[scratchHeaderOffset:]
+// 	byteSlice := bytes.Split(rawParams, rawParams[len(rawParams)-1:])
+// 	for _, b := range byteSlice {
+// 		if len(b) == 0 || bytes.HasPrefix(b, []byte("\\x")) {
+// 			break
+// 		}
+// 		if len(b) > 0 {
+// 			argv = append(argv, string(b))
+// 		}
+// 	}
 
-	execve := Execve{
-		Filename: string(command[:]),
-		Argv:     argv,
-		TID:      int(evtHdr.Tid),
-	}
+// 	execve := Execve{
+// 		Filename: string(command[:]),
+// 		Argv:     argv,
+// 		TID:      int(evtHdr.Tid),
+// 	}
 
-	return execve
-}
+// 	return execve
+// }
 
-// Run continuously queries the perf event array to determine if there was an
-// infringement
-func (agent *Smith) processPerfRecord(rec perf.Record) {
-	if rec.LostSamples != 0 {
-		log.WithField("lost-samples", rec.LostSamples).Warn("event buffer is full, events dropped")
-	}
+// // Run continuously queries the perf event array to determine if there was an
+// // infringement
+// func (agent *Smith) processPerfRecord(rec perf.Record) {
+// 	if rec.LostSamples != 0 {
+// 		log.WithField("lost-samples", rec.LostSamples).Warn("event buffer is full, events dropped")
+// 	}
 
-	var evtHdr EventHeader
-	if err := binary.Read(bytes.NewBuffer(rec.RawSample), binary.LittleEndian, &evtHdr); err != nil {
-		log.WithError(err).Warn("cannot parse perf record")
-	}
+// 	var evtHdr EventHeader
+// 	if err := binary.Read(bytes.NewBuffer(rec.RawSample), binary.LittleEndian, &evtHdr); err != nil {
+// 		log.WithError(err).Warn("cannot parse perf record")
+// 	}
 
-	switch evtHdr.Type {
-	case uint16(bpf.PPME_SYSCALL_EXECVE_19_X):
-		execve := parseExecveExit(evtHdr, rec.RawSample)
-		agent.perfHandler <- agent.handleExecveEvent(execve)
-	}
-}
+// 	switch evtHdr.Type {
+// 	case uint16(bpf.PPME_SYSCALL_EXECVE_19_X):
+// 		execve := parseExecveExit(evtHdr, rec.RawSample)
+// 		agent.perfHandler <- agent.handleExecveEvent(execve)
+// 	}
+// }
 
-// isSupervisor checks if the execve syscall
-// is relative to a supervisor process
-// This check must be very fast to avoid blocking the
-// reading of the perf buffer so no library have been used
-// like prometheus/procfs which reads the whole process tree before
-// allowing to read the executable path
-// What does it do
-// - check if the binary name is supervisor
-// - check if it is the actual supervisor we ship in the workspace
-func isSupervisor(execve Execve) bool {
-	if execve.Filename == "supervisor" {
-		exePath := path.Join("/proc", strconv.Itoa(execve.TID), "exe")
+// // isSupervisor checks if the execve syscall
+// // is relative to a supervisor process
+// // This check must be very fast to avoid blocking the
+// // reading of the perf buffer so no library have been used
+// // like prometheus/procfs which reads the whole process tree before
+// // allowing to read the executable path
+// // What does it do
+// // - check if the binary name is supervisor
+// // - check if it is the actual supervisor we ship in the workspace
+// func isSupervisor(execve Execve) bool {
+// 	if execve.Filename == "supervisor" {
+// 		exePath := path.Join("/proc", strconv.Itoa(execve.TID), "exe")
 
-		// error checking is skipped because the readlink syscall will not find
-		// the destiantion path since its in another mount namespace.
-		absPath, _ := os.Readlink(exePath)
-		if absPath == "/.supervisor/supervisor" {
-			return true
-		}
-	}
-	return false
-}
+// 		// error checking is skipped because the readlink syscall will not find
+// 		// the destiantion path since its in another mount namespace.
+// 		absPath, _ := os.Readlink(exePath)
+// 		if absPath == "/.supervisor/supervisor" {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
-// handles an execve event checks if it's infringing
-func (agent *Smith) handleExecveEvent(execve Execve) func() (*InfringingWorkspace, error) {
+// // handles an execve event checks if it's infringing
+// func (agent *Smith) handleExecveEvent(execve Execve) func() (*InfringingWorkspace, error) {
 
-	if isSupervisor(execve) {
-		// this is not the exact process startup time
-		// but for the type of comparison we need to do is enough
-		agent.pidsMap.Store(execve.TID, time.Now())
-	}
+// 	if isSupervisor(execve) {
+// 		// this is not the exact process startup time
+// 		// but for the type of comparison we need to do is enough
+// 		agent.pidsMap.Store(execve.TID, time.Now())
+// 	}
 
-	return func() (*InfringingWorkspace, error) {
-		if agent.Config.Blacklists == nil {
-			return nil, nil
-		}
+// 	return func() (*InfringingWorkspace, error) {
+// 		if agent.Config.Blacklists == nil {
+// 			return nil, nil
+// 		}
 
-		// Note: mind the order of severity here. We check, hence return very blacklisted command infringements first
-		bls := agent.Config.Blacklists.Levels()
-		var res []Infringement
-		for s, bl := range bls {
-			if bl == nil || len(bl.Binaries) == 0 {
-				continue
-			}
+// 		// Note: mind the order of severity here. We check, hence return very blacklisted command infringements first
+// 		bls := agent.Config.Blacklists.Levels()
+// 		var res []Infringement
+// 		for s, bl := range bls {
+// 			if bl == nil || len(bl.Binaries) == 0 {
+// 				continue
+// 			}
 
-			for _, b := range bl.Binaries {
-				if strings.Contains(execve.Filename, b) || strings.Contains(strings.Join(execve.Argv, "|"), b) {
-					infr := Infringement{
-						Description: fmt.Sprintf("user ran %s blacklisted command: %s %v", s, execve.Filename, execve.Argv),
-						Kind:        GradeKind(InfringementExecBlacklistedCmd, s),
-					}
-					res = append(res, infr)
-				}
-			}
-		}
+// 			for _, b := range bl.Binaries {
+// 				if strings.Contains(execve.Filename, b) || strings.Contains(strings.Join(execve.Argv, "|"), b) {
+// 					infr := Infringement{
+// 						Description: fmt.Sprintf("user ran %s blacklisted command: %s %v", s, execve.Filename, execve.Argv),
+// 						Kind:        GradeKind(InfringementExecBlacklistedCmd, s),
+// 					}
+// 					res = append(res, infr)
+// 				}
+// 			}
+// 		}
 
-		if len(res) == 0 {
-			fd, err := os.Open(filepath.Join("/proc", strconv.Itoa(execve.TID), "exe"))
-			if err != nil {
-				if os.IsNotExist(err) || strings.Contains(err.Error(), "no such process") {
-					// This happens often enough to be too spammy in the logs. Thus we use a metric instead.
-					// If agent-smith does not work as intended, this metric can be indicative of the reason.
-					agent.metrics.signatureCheckMiss.Inc()
-				} else {
-					log.WithError(err).WithField("path", execve.Filename).Warn("cannot open executable to check signatures")
-				}
+// 		if len(res) == 0 {
+// 			fd, err := os.Open(filepath.Join("/proc", strconv.Itoa(execve.TID), "exe"))
+// 			if err != nil {
+// 				if os.IsNotExist(err) || strings.Contains(err.Error(), "no such process") {
+// 					// This happens often enough to be too spammy in the logs. Thus we use a metric instead.
+// 					// If agent-smith does not work as intended, this metric can be indicative of the reason.
+// 					agent.metrics.signatureCheckMiss.Inc()
+// 				} else {
+// 					log.WithError(err).WithField("path", execve.Filename).Warn("cannot open executable to check signatures")
+// 				}
 
-				return nil, nil
-			}
-			defer fd.Close()
+// 				return nil, nil
+// 			}
+// 			defer fd.Close()
 
-			for severity, bl := range bls {
-				if bl == nil || len(bl.Signatures) == 0 {
-					continue
-				}
+// 			for severity, bl := range bls {
+// 				if bl == nil || len(bl.Signatures) == 0 {
+// 					continue
+// 				}
 
-				for _, sig := range bl.Signatures {
-					if sig.Domain != signature.DomainProcess {
-						continue
-					}
+// 				for _, sig := range bl.Signatures {
+// 					if sig.Domain != signature.DomainProcess {
+// 						continue
+// 					}
 
-					m, err := sig.Matches(fd)
-					if err != nil {
-						// We use a metric instead of logging this because this happens very often for a barage of reasons.
-						// If agent-smith does not work as intended, this metric can be indicative of the reason.
-						agent.metrics.signatureCheckFailures.Inc()
-						continue
-					}
-					if !m {
-						continue
-					}
+// 					m, err := sig.Matches(fd)
+// 					if err != nil {
+// 						// We use a metric instead of logging this because this happens very often for a barage of reasons.
+// 						// If agent-smith does not work as intended, this metric can be indicative of the reason.
+// 						agent.metrics.signatureCheckFailures.Inc()
+// 						continue
+// 					}
+// 					if !m {
+// 						continue
+// 					}
 
-					infr := Infringement{Description: fmt.Sprintf("user ran %s blacklisted command: %s", sig.Name, execve.Filename), Kind: GradeKind(InfringementExecBlacklistedCmd, severity)}
-					res = append(res, infr)
-				}
-			}
-		}
+// 					infr := Infringement{Description: fmt.Sprintf("user ran %s blacklisted command: %s", sig.Name, execve.Filename), Kind: GradeKind(InfringementExecBlacklistedCmd, severity)}
+// 					res = append(res, infr)
+// 				}
+// 			}
+// 		}
 
-		if len(res) == 0 {
-			return nil, nil
-		}
+// 		if len(res) == 0 {
+// 			return nil, nil
+// 		}
 
-		ws, err := getWorkspaceFromProcess(execve.TID)
-		if err != nil {
-			// do not log errors about processes not running.
-			if !errors.Is(err, &os.PathError{}) {
-				log.WithField("tid", execve.TID).WithError(err).Warn("cannot get workspace details from process")
-			}
-			ws = &InfringingWorkspace{}
-		}
-		ws.Infringements = res
-		return ws, nil
-	}
-}
+// 		ws, err := getWorkspaceFromProcess(execve.TID)
+// 		if err != nil {
+// 			// do not log errors about processes not running.
+// 			if !errors.Is(err, &os.PathError{}) {
+// 				log.WithField("tid", execve.TID).WithError(err).Warn("cannot get workspace details from process")
+// 			}
+// 			ws = &InfringingWorkspace{}
+// 		}
+// 		ws.Infringements = res
+// 		return ws, nil
+// 	}
+// }
 
 func getWorkspaceFromProcess(tid int) (res *InfringingWorkspace, err error) {
 	proc, err := procfs.NewProc(tid)
