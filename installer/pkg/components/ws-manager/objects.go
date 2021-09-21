@@ -2,19 +2,20 @@
 // Licensed under the GNU Affero General Public License (AGPL).
 // See License-AGPL.txt in the project root for license information.
 
-package wsdaemon
+package wsmanager
 
 import (
 	"github.com/gitpod-io/gitpod/installer/pkg/common"
 )
 
 var Objects = common.CompositeRenderFunc(
-	clusterrole,
 	configmap,
-	common.DefaultServiceAccount(Component),
-	daemonset,
+	deployment,
 	networkpolicy,
+	role,
 	rolebinding,
+	common.DefaultServiceAccount(Component),
 	common.GenerateService(Component),
 	tlssecret,
+	unprivilegedRolebinding,
 )

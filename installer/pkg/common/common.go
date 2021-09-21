@@ -6,11 +6,12 @@ package common
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/docker/distribution/reference"
-	"github.com/gitpod-io/gitpod/content-service/pkg/storage"
+	storageconfig "github.com/gitpod-io/gitpod/content-service/api/config"
 	config "github.com/gitpod-io/gitpod/installer/pkg/config/v1alpha1"
+	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -144,13 +145,13 @@ func ImageName(repo, name, tag string) string {
 	return ref
 }
 
-func StorageConfig(cfg *config.Config) storage.Config {
-	var res *storage.Config
+func StorageConfig(cfg *config.Config) storageconfig.StorageConfig {
+	var res *storageconfig.StorageConfig
 	if cfg.ObjectStorage.CloudStorage != nil {
 		// TODO(cw): where do we get the GCP project from? Is it even still needed?
-		res = &storage.Config{
-			Kind: storage.GCloudStorage,
-			GCloudConfig: storage.GCPConfig{
+		res = &storageconfig.StorageConfig{
+			Kind: storageconfig.GCloudStorage,
+			GCloudConfig: storageconfig.GCPConfig{
 				Region:             cfg.Metadata.Region,
 				Project:            "TODO",
 				CredentialsFile:    "/mnt/secrets/gcp-storage/service-account.json",
@@ -161,9 +162,9 @@ func StorageConfig(cfg *config.Config) storage.Config {
 	}
 	if cfg.ObjectStorage.S3 != nil {
 		// TODO(cw): where do we get the AWS secretKey and accessKey from?
-		res = &storage.Config{
-			Kind: storage.MinIOStorage,
-			MinIOConfig: storage.MinIOConfig{
+		res = &storageconfig.StorageConfig{
+			Kind: storageconfig.MinIOStorage,
+			MinIOConfig: storageconfig.MinIOConfig{
 				Endpoint:        "some-magic-amazon-value?",
 				AccessKeyID:     "TODO",
 				SecretAccessKey: "TODO",
@@ -174,9 +175,9 @@ func StorageConfig(cfg *config.Config) storage.Config {
 		}
 	}
 	if b := cfg.ObjectStorage.InCluster; b != nil && *b {
-		res = &storage.Config{
-			Kind: storage.MinIOStorage,
-			MinIOConfig: storage.MinIOConfig{
+		res = &storageconfig.StorageConfig{
+			Kind: storageconfig.MinIOStorage,
+			MinIOConfig: storageconfig.MinIOConfig{
 				Endpoint:        "minio",
 				AccessKeyID:     "TODO",
 				SecretAccessKey: "TODO",
@@ -191,7 +192,11 @@ func StorageConfig(cfg *config.Config) storage.Config {
 		panic("no valid storage configuration set")
 	}
 
-	res.BackupTrail = storage.BackupTrailConfig{
+	// todo(sje): create exportable type
+	res.BackupTrail = struct {
+		Enabled   bool `json:"enabled"`
+		MaxLength int  `json:"maxLength"`
+	}{
 		Enabled:   true,
 		MaxLength: 3,
 	}
@@ -200,6 +205,32 @@ func StorageConfig(cfg *config.Config) storage.Config {
 
 	return *res
 }
+
+var (
+	TCPProtocol = func() *corev1.Protocol {
+		tcpProtocol := corev1.ProtocolTCP
+		return &tcpProtocol
+	}()
+	PrometheusIngressRule = networkingv1.NetworkPolicyIngressRule{
+		Ports: []networkingv1.NetworkPolicyPort{
+			{
+				Protocol: TCPProtocol,
+				Port:     &intstr.IntOrString{IntVal: 9500},
+			},
+		},
+		From: []networkingv1.NetworkPolicyPeer{
+			{
+				// todo(sje): add these labels to the prometheus instance
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app":       "prometheus",
+						"component": "server",
+					},
+				},
+			},
+		},
+	}
+)
 
 // TODO(cw): find a better way to do this. Those values must exist in the appropriate places already.
 var (
@@ -219,9 +250,36 @@ var (
 		APIVersion: "apps/v1",
 		Kind:       "DaemonSet",
 	}
-
+	TypeMetaService = metav1.TypeMeta{
+		APIVersion: "v1",
+		Kind:       "Service",
+	}
 	TypeMetaClusterRole = metav1.TypeMeta{
 		APIVersion: "rbac.authorization.k8s.io/v1",
 		Kind:       "ClusterRole",
+	}
+	TypeMetaClusterRoleBinding = metav1.TypeMeta{
+		APIVersion: "rbac.authorization.k8s.io/v1",
+		Kind:       "ClusterRoleBinding",
+	}
+	TypeMetaRoleBinding = metav1.TypeMeta{
+		APIVersion: "rbac.authorization.k8s.io/v1",
+		Kind:       "RoleBinding",
+	}
+	TypeMetaNetworkPolicy = metav1.TypeMeta{
+		APIVersion: "networking.k8s.io/v1",
+		Kind:       "NetworkPolicy",
+	}
+	TypeMetaDeployment = metav1.TypeMeta{
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+	}
+	TypeMetaCertificate = metav1.TypeMeta{
+		APIVersion: "cert-manager.io/v1",
+		Kind:       "Certificate",
+	}
+	TypeMetaSecret = metav1.TypeMeta{
+		APIVersion: "v1",
+		Kind:       "Secret",
 	}
 )

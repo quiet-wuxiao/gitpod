@@ -20,7 +20,7 @@ import (
 
 func daemonset(ctx *common.RenderContext) ([]runtime.Object, error) {
 	cfg := ctx.Config
-	labels := common.DefaultLabels(component)
+	labels := common.DefaultLabels(Component)
 
 	initContainers := []corev1.Container{
 		{
@@ -86,7 +86,7 @@ sysctl -w vm.unprivileged_userfaultfd=0
 			SecurityContext: &corev1.SecurityContext{Privileged: pointer.Bool(true)},
 		},
 	}
-	if cfg.WorkspaceRuntime.FSShiftMethod == config.FSShiftShiftFS {
+	if cfg.Workspace.Runtime.FSShiftMethod == config.FSShiftShiftFS {
 		initContainers = append(initContainers, corev1.Container{
 			Name:  "shiftfs-module-loader",
 			Image: common.ImageName(cfg.Repository, "shiftfs-module-loader", ctx.VersionManifest.Components.WSDaemon.UserNamespaces.ShiftFSModuleLoader.Version),
@@ -102,8 +102,9 @@ sysctl -w vm.unprivileged_userfaultfd=0
 	return []runtime.Object{&appsv1.DaemonSet{
 		TypeMeta: common.TypeMetaDaemonset,
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   component,
-			Labels: labels,
+			Name:      Component,
+			Namespace: ctx.Namespace,
+			Labels:    labels,
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
@@ -131,7 +132,7 @@ sysctl -w vm.unprivileged_userfaultfd=0
 						},
 						{
 							Name:         "tls-certs",
-							VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "ws-daemon-tls"}},
+							VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: TLSSecretName}},
 						},
 						{
 							Name: "config",
@@ -203,7 +204,7 @@ sysctl -w vm.unprivileged_userfaultfd=0
 					InitContainers: initContainers,
 					Containers: []corev1.Container{
 						{
-							Name:  component,
+							Name:  Component,
 							Image: "eu.gcr.io/gitpod-core-dev/build/ws-daemon:not-set",
 							Args: []string{
 								"run",
@@ -213,8 +214,8 @@ sysctl -w vm.unprivileged_userfaultfd=0
 							},
 							Ports: []corev1.ContainerPort{{
 								Name:          "rpc",
-								HostPort:      8080,
-								ContainerPort: 8080,
+								HostPort:      ServicePort,
+								ContainerPort: ServicePort,
 							}},
 							Env: common.MergeEnv(
 								common.DefaultEnv(&cfg),
@@ -298,7 +299,7 @@ sysctl -w vm.unprivileged_userfaultfd=0
 					RestartPolicy:                 corev1.RestartPolicy("Always"),
 					TerminationGracePeriodSeconds: pointer.Int64(30),
 					DNSPolicy:                     corev1.DNSPolicy("ClusterFirst"),
-					ServiceAccountName:            component,
+					ServiceAccountName:            Component,
 					HostPID:                       true,
 					Affinity:                      common.Affinity(common.AffinityLabelWorkspaces, common.AffinityLabelHeadless),
 					Tolerations: []corev1.Toleration{
