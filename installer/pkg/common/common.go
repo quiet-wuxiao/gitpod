@@ -95,6 +95,34 @@ func MessageBusEnv(cfg *config.Config) (res []corev1.EnvVar) {
 	return []corev1.EnvVar{}
 }
 
+// todo(sje): provide values from config
+func DatabaseEnv(cfg *config.Config) (res []corev1.EnvVar) {
+	return []corev1.EnvVar{{
+		Name:  "DB_HOST",
+		Value: "",
+	}, {
+		Name:  "DB_PORT",
+		Value: "",
+	}, {
+		Name:  "DB_PASSWORD",
+		Value: "",
+	}, {
+		// todo(sje): conditional
+		Name:  "DB_DELETED_ENTRIES_GC_ENABLED",
+		Value: "",
+	}, {
+		Name: "DB_ENCRYPTION_KEYS",
+		// todo(sje): either Value or ValueFrom
+		Value: "",
+		ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: "",
+			},
+			Key: "keys",
+		}},
+	}}
+}
+
 func DatabaseWaiterContainer() *corev1.Container {
 	return &corev1.Container{}
 }
