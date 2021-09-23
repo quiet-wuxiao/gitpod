@@ -1600,6 +1600,11 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
         throw new ResponseError(ErrorCodes.EE_FEATURE, `Triggering Prebuilds is implemented in Gitpod's Enterprise Edition`);
     }
 
+    public async cancelPrebuild(projectId: string, prebuildId: string): Promise<void> {
+        this.checkAndBlockUser("cancelPrebuild");
+        throw new ResponseError(ErrorCodes.EE_FEATURE, `Cancelling Prebuilds is implemented in Gitpod's Enterprise Edition`);
+    }
+
     public async setProjectConfiguration(projectId: string, configString: string): Promise<void> {
         const user = this.checkAndBlockUser("setProjectConfiguration");
         await this.guardProjectOperation(user, projectId, "update");

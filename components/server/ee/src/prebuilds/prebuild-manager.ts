@@ -5,7 +5,7 @@
  */
 
 import { DBWithTracing, TracedWorkspaceDB, WorkspaceDB } from '@gitpod/gitpod-db/lib';
-import { CommitContext, Project, StartPrebuildContext, StartPrebuildResult, User, WorkspaceConfig, WorkspaceInstance } from '@gitpod/gitpod-protocol';
+import { CommitContext, Project, StartPrebuildContext, StartPrebuildResult, User, WorkspaceConfig, WorkspaceInstance, HeadlessWorkspaceEvent, HeadlessWorkspaceEventType } from '@gitpod/gitpod-protocol';
 import { log } from '@gitpod/gitpod-protocol/lib/util/logging';
 import { TraceContext } from '@gitpod/gitpod-protocol/lib/util/tracing';
 import { inject, injectable } from 'inversify';
@@ -14,6 +14,7 @@ import { HostContextProvider } from '../../../src/auth/host-context-provider';
 import { WorkspaceFactory } from '../../../src/workspace/workspace-factory';
 import { ConfigProvider } from '../../../src/workspace/config-provider';
 import { WorkspaceStarter } from '../../../src/workspace/workspace-starter';
+import { MessageBusIntegration } from '../../../src/workspace/messagebus-integration';
 import { Config } from '../../../src/config';
 
 export class WorkspaceRunningError extends Error {
@@ -36,6 +37,7 @@ export class PrebuildManager {
     @inject(TracedWorkspaceDB) protected readonly workspaceDB: DBWithTracing<WorkspaceDB>;
     @inject(WorkspaceFactory) protected readonly workspaceFactory: WorkspaceFactory;
     @inject(WorkspaceStarter) protected readonly workspaceStarter: WorkspaceStarter;
+    @inject(MessageBusIntegration) protected readonly messageBus: MessageBusIntegration;
     @inject(HostContextProvider) protected readonly hostContextProvider: HostContextProvider;
     @inject(ConfigProvider) protected readonly configProvider: ConfigProvider;
     @inject(Config) protected readonly config: Config;
@@ -129,6 +131,30 @@ export class PrebuildManager {
             }
             await this.workspaceStarter.startWorkspace({ span }, workspace, user);
             return { wsid: workspace.id, done: false };
+        } catch (err) {
+            TraceContext.logError({ span }, err);
+            throw err;
+        } finally {
+            span.finish();
+        }
+    }
+
+    async cancelPrebuild(ctx: TraceContext, user: User, prebuildId: string): Promise<void> {
+        const span = TraceContext.startSpan("cancelPrebuild", ctx);
+        span.setTag("prebuildId", prebuildId);
+        try {
+            const prebuild = await this.workspaceDB.trace({ span }).findPrebuildByID(prebuildId);
+            if (!prebuild || prebuild.state === 'aborted') {
+                return;
+            }
+            // TODO(janx): stop `prebuild.buildWorkspaceId`?
+            prebuild.state = 'aborted';
+            prebuild.error = 'Cancelled manually';
+            await this.workspaceDB.trace({ span }).storePrebuiltWorkspace(prebuild);
+            await this.messageBus.notifyHeadlessUpdate({ span }, user.id, prebuild.buildWorkspaceId, <HeadlessWorkspaceEvent>{
+                type: HeadlessWorkspaceEventType.Aborted,
+                workspaceID: prebuild.buildWorkspaceId,
+            });
         } catch (err) {
             TraceContext.logError({ span }, err);
             throw err;

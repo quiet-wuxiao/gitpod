@@ -1555,6 +1555,23 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
         return prebuild;
     }
 
+    async cancelPrebuild(projectId: string, prebuildId: string): Promise<void> {
+        const user = this.checkAndBlockUser("cancelPrebuild");
+
+        const project = await this.projectsService.getProject(projectId);
+        if (!project) {
+            throw new ResponseError(ErrorCodes.NOT_FOUND, "Project not found");
+        }
+        await this.guardProjectOperation(user, projectId, "update");
+
+        const span = opentracing.globalTracer().startSpan("cancelPrebuild");
+        span.setTag("userId", user.id);
+        span.setTag("projectId", projectId);
+        span.setTag("prebuildId", prebuildId);
+
+        await this.prebuildManager.cancelPrebuild({ span }, user, prebuildId);
+    }
+
     public async createProject(params: CreateProjectParams): Promise<Project> {
         const project = await super.createProject(params);
 
