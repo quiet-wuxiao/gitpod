@@ -12,6 +12,7 @@ css-gen/
 node_modules/
 yarn-error.log
 lerna-debug.log
+
 **/telepresence.log
 .env
 .tmp
