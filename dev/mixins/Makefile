@@ -33,6 +33,14 @@ lint: $(JSONNETFMT_BIN)
 			$(JSONNET_FMT) "$$f" | diff -u "$$f" -; \
 		done
 
+.PHONY: prometheus_alerts.yaml
+prometheus_alerts.yaml: $(JSONNET_BIN)
+	jsonnet -S alerts.jsonnet > $@
+
+.PHONY: promtool-lint
+promtool-lint: prometheus_alerts.yaml
+	promtool check rules prometheus_alerts.yaml
+
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 

@@ -2,7 +2,7 @@
   prometheusAlerts+:: {
     groups+: [
       {
-        name: 'gitpod-component-node-alerts',
+        name: 'gitpod-component-meta-node-alerts',
         rules: [
           {
             alert: 'GitpodMetaNodeOOMKills',
