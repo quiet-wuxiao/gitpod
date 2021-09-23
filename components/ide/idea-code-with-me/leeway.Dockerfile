@@ -5,4 +5,4 @@
 FROM scratch
 
 # copy static web resources in first layer to serve from blobserve
-COPY --chown=33333:33333 index.html startup.sh supervisor-ide-config.json /ide/
+COPY --chown=33333:33333 index.html startup.sh supervisor-ide-config.json /ide-remote/

@@ -242,7 +242,7 @@ func Run(options ...RunOption) {
 
 	var ideWG sync.WaitGroup
 	ideWG.Add(1)
-	go startAndWatchIDE(ctx, cfg, &ideWG, ideReady)
+	go startAndWatchIDE(ctx, cfg, &ideWG, ideReady, nil) // FIXME
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -474,7 +474,15 @@ func reaper(terminatingReaper <-chan bool) {
 	}
 }
 
-func startAndWatchIDE(ctx context.Context, cfg *Config, wg *sync.WaitGroup, ideReady *ideReadyState) {
+type ideStatus int
+
+const (
+	statusNeverRan ideStatus = iota
+	statusShouldRun
+	statusShouldShutdown
+)
+
+func startAndWatchIDE(ctx context.Context, cfg *Config, wg *sync.WaitGroup, ideReady *ideReadyState, remoteIdeReady *ideReadyState) {
 	defer wg.Done()
 	defer log.Debug("startAndWatchIDE shutdown")
 
@@ -483,77 +491,44 @@ func startAndWatchIDE(ctx context.Context, cfg *Config, wg *sync.WaitGroup, ideR
 		return
 	}
 
-	type status int
-	const (
-		statusNeverRan status = iota
-		statusShouldRun
-		statusShouldShutdown
-	)
-	s := statusNeverRan
+	ideStatus := statusNeverRan
+	remoteIdeStatus := statusNeverRan
 
 	var (
-		cmd        *exec.Cmd
-		ideStopped chan struct{}
+		cmd              *exec.Cmd
+		ideStopped       chan struct{}
+		remoteIdeCmd     *exec.Cmd
+		remoteIdeStopped chan struct{}
 	)
 supervisorLoop:
 	for {
-		if s == statusShouldShutdown {
+		if ideStatus == statusShouldShutdown {
 			break
 		}
 
 		ideStopped = make(chan struct{}, 1)
-		go func() {
-			cmd = prepareIDELaunch(cfg)
-
-			// prepareIDELaunch sets Pdeathsig, which on on Linux, will kill the
-			// child process when the thread dies, not when the process dies.
-			// runtime.LockOSThread ensures that as long as this function is
-			// executing that OS thread will still be around.
-			//
-			// see https://github.com/golang/go/issues/27505#issuecomment-713706104
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-
-			err := cmd.Start()
-			if err != nil {
-				if s == statusNeverRan {
-					log.WithError(err).Fatal("IDE failed to start")
-				}
-
-				return
-			}
-			s = statusShouldRun
-
-			go func() {
-				runIDEReadinessProbe(cfg)
-				ideReady.Set(true)
-			}()
-
-			err = cmd.Wait()
-			if err != nil && !(strings.Contains(err.Error(), "signal: interrupt") || strings.Contains(err.Error(), "wait: no child processes")) {
-				log.WithError(err).Warn("IDE was stopped")
-
-				ideWasReady := ideReady.Get()
-				if !ideWasReady {
-					log.WithError(err).Fatal("IDE failed to start")
-					return
-				}
-			}
-
-			ideReady.Set(false)
-			close(ideStopped)
-		}()
+		launchIDE(prepareIDELaunch, cfg, cmd, ideStopped, ideReady, &ideStatus)
+		if remoteIdeReady != nil {
+			launchIDE(prepareRemoteIDELaunch, cfg, remoteIdeCmd, remoteIdeStopped, remoteIdeReady, &remoteIdeStatus)
+		}
 
 		select {
 		case <-ideStopped:
 			// IDE was stopped - let's just restart it after a small delay (in case the IDE doesn't start at all) in the next round
-			if s == statusShouldShutdown {
+			if ideStatus == statusShouldShutdown {
+				break supervisorLoop
+			}
+			time.Sleep(1 * time.Second)
+		case <-remoteIdeStopped:
+			// FIXME
+			// IDE was stopped - let's just restart it after a small delay (in case the IDE doesn't start at all) in the next round
+			if remoteIdeStatus == statusShouldShutdown {
 				break supervisorLoop
 			}
 			time.Sleep(1 * time.Second)
 		case <-ctx.Done():
 			// we've been asked to shut down
-			s = statusShouldShutdown
+			ideStatus = statusShouldShutdown
 			if cmd != nil && cmd.Process != nil {
 				cmd.Process.Signal(os.Interrupt)
 			}
@@ -569,6 +544,51 @@ supervisorLoop:
 		log.WithField("timeBudgetIDEShutdown", timeBudgetIDEShutdown.String()).Error("IDE did not stop in time - sending SIGKILL")
 		cmd.Process.Signal(syscall.SIGKILL)
 	}
+}
+
+func launchIDE(prepareIdeLaunchFunc func(cfg *Config) *exec.Cmd, cfg *Config, cmd *exec.Cmd, ideStopped chan struct{}, ideReady *ideReadyState, s *ideStatus) {
+	go func() {
+		cmd = prepareIdeLaunchFunc(cfg)
+
+		// prepareIDELaunch sets Pdeathsig, which on on Linux, will kill the
+		// child process when the thread dies, not when the process dies.
+		// runtime.LockOSThread ensures that as long as this function is
+		// executing that OS thread will still be around.
+		//
+		// see https://github.com/golang/go/issues/27505#issuecomment-713706104
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
+		err := cmd.Start()
+		if err != nil {
+			if s == func() *ideStatus { i := statusNeverRan; return &i }() {
+				log.WithError(err).Fatal("IDE failed to start")
+			}
+
+			return
+		}
+		s = func() *ideStatus { i := statusShouldRun; return &i }()
+
+		go func() {
+			// FIXME
+			runIDEReadinessProbe(cfg)
+			ideReady.Set(true)
+		}()
+
+		err = cmd.Wait()
+		if err != nil && !(strings.Contains(err.Error(), "signal: interrupt") || strings.Contains(err.Error(), "wait: no child processes")) {
+			log.WithError(err).Warn("IDE was stopped")
+
+			ideWasReady := ideReady.Get()
+			if !ideWasReady {
+				log.WithError(err).Fatal("IDE failed to start")
+				return
+			}
+		}
+
+		ideReady.Set(false)
+		close(ideStopped)
+	}()
 }
 
 func prepareIDELaunch(cfg *Config) *exec.Cmd {
@@ -599,6 +619,43 @@ func prepareIDELaunch(cfg *Config) *exec.Cmd {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if lrr := cfg.LogRateLimit(); lrr > 0 {
+		limit := int64(lrr)
+		cmd.Stdout = dropwriter.Writer(cmd.Stdout, dropwriter.NewBucket(limit*1024*3, limit*1024))
+		cmd.Stderr = dropwriter.Writer(cmd.Stderr, dropwriter.NewBucket(limit*1024*3, limit*1024))
+		log.WithField("limit_kb_per_sec", limit).Info("rate limiting IDE log output")
+	}
+
+	return cmd
+}
+
+func prepareRemoteIDELaunch(cfg *Config) *exec.Cmd {
+	if cfg.RemoteIDE == nil {
+		return nil
+	}
+	var args []string
+	log.WithField("args", args).WithField("entrypoint", cfg.RemoteIDE.Entrypoint).Info("launching remote IDE")
+
+	cmd := exec.Command(cfg.RemoteIDE.Entrypoint, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// We need the child process to run in its own process group, s.t. we can suspend and resume
+		// IDE and its children.
+		Setpgid:   true,
+		Pdeathsig: syscall.SIGKILL,
+
+		// All supervisor children run as gitpod user. The environment variables we produce are also
+		// gitpod user specific.
+		Credential: &syscall.Credential{
+			Uid: gitpodUID,
+			Gid: gitpodGID,
+		},
+	}
+	cmd.Env = buildChildProcEnv(cfg, nil)
+
+	// Here we must resist the temptation to "neaten up" the IDE output for headless builds.
+	// This would break the JSON parsing of the headless builds.
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if lrr := cfg.RemoteIDELogRateLimit(); lrr > 0 {
 		limit := int64(lrr)
 		cmd.Stdout = dropwriter.Writer(cmd.Stdout, dropwriter.NewBucket(limit*1024*3, limit*1024))
 		cmd.Stderr = dropwriter.Writer(cmd.Stderr, dropwriter.NewBucket(limit*1024*3, limit*1024))

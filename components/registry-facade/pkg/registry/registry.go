@@ -132,6 +132,15 @@ func NewRegistry(cfg Config, newResolver ResolverProvider, reg prometheus.Regist
 	}
 	layerSources = append(layerSources, ideLayerSource)
 
+	remoteIdeRefSource := func(s *api.ImageSpec) (ref string, err error) {
+		return s.RemoteIdeRef, nil
+	}
+	remoteIdeLayerSource, err := NewSpecMappedImageSource(newResolver, remoteIdeRefSource)
+	if err != nil {
+		return nil, err
+	}
+	layerSources = append(layerSources, remoteIdeLayerSource)
+
 	log.Info("preparing static layer")
 	staticLayer := NewRevisioningLayerSource(CompositeLayerSource{})
 	layerSources = append(layerSources, staticLayer)

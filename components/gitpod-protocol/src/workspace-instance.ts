@@ -206,4 +206,7 @@ export interface WorkspaceInstanceConfiguration {
 
     // ideImage is the ref of the IDE image this instance uses.
     ideImage: string;
+
+    // remoteIdeImage is the ref of the remote IDE image this instance uses.
+    remoteIdeImage?: string
 }

@@ -299,6 +299,9 @@ export class WorkspaceStarter {
             }
         }
 
+        // FIXME
+        configuration.remoteIdeImage = ideConfig.ideImageAliases["code-latest"];
+
         let featureFlags: NamedWorkspaceFeatureFlag[] = workspace.config._featureFlags || [];
         featureFlags = featureFlags.concat(this.config.workspaceDefaults.defaultFeatureFlags);
         if (user.featureFlags && user.featureFlags.permanentWSFeatureFlags) {
@@ -705,6 +708,7 @@ export class WorkspaceStarter {
         spec.setPortsList(ports);
         spec.setInitializer((await initializerPromise).initializer);
         spec.setIdeImage(ideImage);
+        spec.setRemoteIdeImage(instance.configuration?.remoteIdeImage || "");
         spec.setWorkspaceImage(instance.workspaceImage);
         spec.setWorkspaceLocation(workspace.config.workspaceLocation || spec.getCheckoutLocation());
         spec.setFeatureFlagsList(this.toWorkspaceFeatureFlags(featureFlags));

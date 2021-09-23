@@ -29,12 +29,14 @@ const supervisorConfigFile = "supervisor-config.json"
 //                  there's some configuration that lives with supervisor and its "installation",
 //                  For example the IDE config location depends on if supervisor is served via registry-facade.
 //   2. IDE: Gitpod supports different IDEs, all of which have different configuration needs.
-//   3. Workspace: which depends on the individual workspace, its content and configuration.
+//   3. RemoteIDE: Gitpod supports to connect remote IDEs (like desktop IDEs).
+//   4. Workspace: which depends on the individual workspace, its content and configuration.
 
 // Config configures supervisor
 type Config struct {
 	StaticConfig
 	IDEConfig
+	RemoteIDE *IDEConfig
 	WorkspaceConfig
 }
 
@@ -45,6 +47,11 @@ func (c Config) Validate() error {
 	}
 	if err := c.IDEConfig.Validate(); err != nil {
 		return xerrors.Errorf("IDE config is invalid: %w", err)
+	}
+	if c.RemoteIDE != nil {
+		if err := c.RemoteIDE.Validate(); err != nil {
+			return xerrors.Errorf("Remote IDE config is invalid: %w", err)
+		}
 	}
 	if err := c.WorkspaceConfig.Validate(); err != nil {
 		return xerrors.Errorf("Workspace config is invalid: %w", err)
@@ -62,10 +69,25 @@ func (c Config) LogRateLimit() int {
 	return c.IDELogRateLimit
 }
 
+// RemoteIDELogRateLimit returns the log rate limit for the remote IDE process in kib/sec.
+// If log rate limiting is disbaled, this function returns 0.
+func (c Config) RemoteIDELogRateLimit() int {
+	if c.RemoteIDE == nil {
+		return c.WorkspaceLogRateLimit
+	}
+	if c.WorkspaceLogRateLimit < c.RemoteIDE.IDELogRateLimit {
+		return c.WorkspaceLogRateLimit
+	}
+	return c.RemoteIDE.IDELogRateLimit
+}
+
 // StaticConfig is the supervisor-wide configuration
 type StaticConfig struct {
 	// IDEConfigLocation is a path in the filesystem where to find the IDE configuration
 	IDEConfigLocation string `json:"ideConfigLocation"`
+
+	// RemoteIDEConfigLocation is a path in the filesystem where to find the remote IDE configuration
+	RemoteIDEConfigLocation string `json:"remoteIdeConfigLocation"`
 
 	// FrontendLocation is a path in the filesystem where to find supervisor's frontend assets
 	FrontendLocation string `json:"frontendLocation"`
@@ -357,6 +379,16 @@ func GetConfig() (*Config, error) {
 		return nil, err
 	}
 
+	var remoteIde *IDEConfig
+	if static.RemoteIDEConfigLocation != "" {
+		if _, err := os.Stat(static.RemoteIDEConfigLocation); !os.IsNotExist((err)) {
+			remoteIde, err = loadIDEConfigFromFile(static.RemoteIDEConfigLocation)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	workspace, err := loadWorkspaceConfigFromEnv()
 	if err != nil {
 		return nil, err
@@ -365,6 +397,7 @@ func GetConfig() (*Config, error) {
 	return &Config{
 		StaticConfig:    *static,
 		IDEConfig:       *ide,
+		RemoteIDE:       remoteIde,
 		WorkspaceConfig: *workspace,
 	}, nil
 }
