@@ -42,7 +42,7 @@ async function ensureCorrectInstallationOrder(){
     // Adds a label to the namespace metadata.
     // This label is used by ServiceMonitor's namespaceSelector, so Prometheus
     // only scrape metrics from its own namespace.
-    exec('kubectl apply -f observability/monitoring-satellite/manifests/namespace.yaml', {silent: true})
+    // exec('kubectl apply -f observability/monitoring-satellite/manifests/namespace.yaml', {silent: true})
 
     exec('kubectl apply -f observability/monitoring-satellite/manifests/podsecuritypolicy-restricted.yaml', {silent: true})
     werft.log(sliceName, 'installing prometheus-operator')
