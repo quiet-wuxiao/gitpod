@@ -43,7 +43,7 @@ export default function Menu() {
     })();
     const prebuildId = (() => {
         const resource = projectName && match?.params?.segment3;
-        if (resource !== "prebuilds" && resource !== "settings" && resource !== "configure") {
+        if (resource !== "workspaces" && resource !== "prebuilds" && resource !== "settings" && resource !== "configure") {
             return resource;
         }
     })();
@@ -86,6 +86,10 @@ export default function Menu() {
                     link: `${teamOrUserSlug}/${projectName}`
                 },
                 {
+                    title: 'Workspaces',
+                    link: `${teamOrUserSlug}/${projectName}/workspaces`
+                },
+                {
                     title: 'Prebuilds',
                     link: `${teamOrUserSlug}/${projectName}/prebuilds`
                 },
@@ -101,7 +105,11 @@ export default function Menu() {
                 {
                     title: 'Projects',
                     link: `/t/${team.slug}/projects`,
-                    alternatives: [`/${team.slug}`]
+                },
+                {
+                    title: 'Workspaces',
+                    link: `/t/${team.slug}/workspaces`,
+                    alternatives: [`/t/${team.slug}`]
                 },
                 {
                     title: 'Members',
@@ -261,7 +269,7 @@ export default function Menu() {
                 </div>
             </div>
             {!isMinimalUI && showTeamsUI && !prebuildId && <div className="flex">
-                {leftMenu.map((entry: Entry) => <TabMenuItem name={entry.title} selected={isSelected(entry, location)} link={entry.link}/>)}
+                {leftMenu.map((entry: Entry) => <TabMenuItem key={entry.title} name={entry.title} selected={isSelected(entry, location)} link={entry.link}/>)}
             </div>}
         </header>
         {showTeamsUI && <Separator />}
