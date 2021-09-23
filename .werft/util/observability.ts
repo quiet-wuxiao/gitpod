@@ -44,7 +44,7 @@ async function ensureCorrectInstallationOrder(){
     // only scrape metrics from its own namespace.
     // exec('kubectl apply -f observability/monitoring-satellite/manifests/namespace.yaml', {silent: true})
 
-    exec('kubectl apply -f observability/monitoring-satellite/manifests/podsecuritypolicy-restricted.yaml', {silent: true})
+    // exec('kubectl apply -f observability/monitoring-satellite/manifests/podsecuritypolicy-restricted.yaml', {silent: true})
     werft.log(sliceName, 'installing prometheus-operator')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/prometheus-operator/', {silent: true})
     exec('kubectl rollout status deployment prometheus-operator', {slice: sliceName})
