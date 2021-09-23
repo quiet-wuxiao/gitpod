@@ -1,6 +1,6 @@
 {
   prometheusRules+:: {
-    groups: [],
+    groups+: [],
   // There is no recording rules for this component.
   },
 }

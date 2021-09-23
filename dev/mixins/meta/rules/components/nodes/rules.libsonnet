@@ -1,6 +1,6 @@
 {
   prometheusRules+:: {
-    groups: [],
+    groups+: [],
     // meta team doesn have any recording rules yet
   },
 }

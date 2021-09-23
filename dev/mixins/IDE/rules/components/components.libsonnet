@@ -2,12 +2,12 @@
 // Ping @ArthurSens if necessary
 {
   prometheusAlerts+:: {
-    groups: [],
+    groups+: [],
     // IDE team doesn have any alerts yet
   },
 
   prometheusRules+:: {
-    groups: [],
+    groups+: [],
     // IDE team doesn have any recording rules yet
   },
 }
