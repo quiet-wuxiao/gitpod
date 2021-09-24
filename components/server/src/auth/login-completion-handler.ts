@@ -86,12 +86,14 @@ export class LoginCompletionHandler {
             let anonymousId = request.cookies.ajs_anonymous_id;
             //make identify call if anonymous ID was found
             if (anonymousId) this.analytics.identify({anonymousId: anonymousId.replace(/(^"|"$)/g, ''),userId:user.id});
+            //TODO: remove the log when done testing
+            log.debug("This is a request:" + JSON.stringify(request));
             this.analytics.track({
                 userId: user.id,
                 event: "login",
                 properties: {
                     "loginContext": authHost,
-                    "location": (request.header as any)["x-glb-client-city-lat-long"]
+                    "location": request.headers["x-glb-client-city-lat-long"]
                 }
             });
         }
