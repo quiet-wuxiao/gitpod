@@ -16,6 +16,8 @@ import { prebuildStatusIcon, prebuildStatusLabel } from "./Prebuilds";
 import { ContextMenuEntry } from "../components/ContextMenu";
 import { shortCommitMessage } from "./render-utils";
 import Spinner from "../icons/Spinner.svg";
+import { ErrorCodes } from "@gitpod/gitpod-protocol/lib/messaging/error";
+import { openAuthorizeWindow } from "../provider-utils";
 
 export default function () {
     const history = useHistory();
@@ -36,9 +38,28 @@ export default function () {
 
     const [searchFilter, setSearchFilter] = useState<string | undefined>();
 
+    const [showAuthBanner, setShowAuthBanner] = useState<{ host: string } | undefined>(undefined);
+
     useEffect(() => {
         updateProject();
-    }, [ teams ]);
+    }, [teams]);
+
+    useEffect(() => {
+        if (!project) {
+            return;
+        }
+        (async () => {
+            try {
+                await updateBranches();
+            } catch (error) {
+                if (error && error.code === ErrorCodes.NOT_AUTHENTICATED) {
+                    setShowAuthBanner({ host: new URL(project.cloneUrl).hostname });
+                } else {
+                    console.error('Getting branches failed', error);
+                }
+            }
+        })();
+    }, [project]);
 
     const updateProject = async () => {
         if (!teams || !projectName) {
@@ -54,7 +75,12 @@ export default function () {
         }
 
         setProject(project);
+    }
 
+    const updateBranches = async () => {
+        if (!project) {
+            return;
+        }
         setIsLoadingBranches(true);
         try {
             const details = await getGitpodService().server.getProjectOverview(project.id);
@@ -69,6 +95,31 @@ export default function () {
             setIsLoadingBranches(false);
         }
     }
+
+    const tryAuthorize = async (host: string, onSuccess: () => void) => {
+        try {
+            await openAuthorizeWindow({
+                host,
+                onSuccess,
+                onError: (error) => {
+                    console.log(error);
+                }
+            });
+        } catch (error) {
+            console.log(error);
+        }
+    };
+
+    const onConfirmShowAuthModal = async (host: string) => {
+        setShowAuthBanner(undefined);
+        await tryAuthorize(host, async () => {
+            // update remote session
+            await getGitpodService().reconnect();
+
+            // retry fetching branches
+            updateBranches();
+        });
+    };
 
     const branchContextMenu = (branch: Project.BranchDetails) => {
         const entries: ContextMenuEntry[] = [];
@@ -121,7 +172,7 @@ export default function () {
     }
 
     const openPrebuild = (pb: PrebuildInfo) => {
-        history.push(`/${!!team ? 't/'+team.slug : 'projects'}/${projectName}/${pb.id}`);
+        history.push(`/${!!team ? 't/' + team.slug : 'projects'}/${projectName}/${pb.id}`);
     }
 
     const formatDate = (date: string | undefined) => {
@@ -130,6 +181,7 @@ export default function () {
 
     return <>
         <Header title="Branches" subtitle={<h2 className="tracking-wide">View recent active branches for <a className="text-gray-500 hover:text-gray-800 font-semibold" href={project?.cloneUrl}>{project?.name}</a>.</h2>} />
+
         <div className="lg:px-28 px-10">
             <div className="flex mt-8">
                 <div className="flex">
@@ -195,6 +247,19 @@ export default function () {
                         </ItemField>
                     </Item>
                 }
+                )}
+                {showAuthBanner && (
+                    <div className="mt-8 rounded-xl bg-gray-100 dark:border-gray-800 flex-col">
+                        <div className="p-6 text-center">
+                            <div className="text-center text-gray-500 pb-3 font-bold">
+                                No Access
+                            </div>
+                            <div className="text-center text-gray-400 pb-3">
+                                Authorize {showAuthBanner.host} <br />to access branch information.
+                            </div>
+                            <button className={`primary mr-2 py-2`} onClick={() => onConfirmShowAuthModal(showAuthBanner.host)}>Authorize Provider</button>
+                        </div>
+                    </div>
                 )}
             </ItemsList>
         </div>
