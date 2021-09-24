@@ -78,6 +78,7 @@ export class WebsocketConnectionManager<C extends GitpodClient, S extends Gitpod
         }
 
         const dnt = (expressReq as any)['dnt']
+        log.debug(JSON.stringify(expressReq));
         const clientHeaderFields:ClientHeaderFields = {
             ip: (expressReq as any).headers['x-real-ip'],
             userAgent: (expressReq as any).headers['user-agent'],
